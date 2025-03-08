@@ -6,8 +6,8 @@ import os
 import json
 import pandas as pd
 
-from app.config import get_settings
-from app.services.knowledge_graph import get_knowledge_graph
+from backend.app.config import get_settings
+from backend.app.services.knowledge_graph import get_knowledge_graph
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
