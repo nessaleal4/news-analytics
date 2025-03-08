@@ -21,46 +21,4 @@ class SearchRequest(BaseModel):
     limit: int = Field(10, ge=1, le=50)
 
 class SearchResponse(BaseModel):
-    results: List[SearchResult]
-
-# Topic models
-class Keyword(BaseModel):
-    word: str
-    score: float
-
-class Topic(BaseModel):
-    id: int
-    name: str
-    count: int
-    keywords: List[Keyword]
-
-class TopicResponse(BaseModel):
-    topics: List[Topic]
-
-class ArticlesResponse(BaseModel):
-    articles: List[Article]
-
-# Knowledge graph models
-class Node(BaseModel):
-    id: str
-    group: int
-    count: Optional[int] = None
-
-class Link(BaseModel):
-    source: str
-    target: str
-    value: int
-
-class KnowledgeGraph(BaseModel):
-    nodes: List[Node]
-    links: List[Link]
-
-class EntityConnection(BaseModel):
-    entity: str
-    strength: int
-    count: Optional[int] = None
-
-class EntityDetail(BaseModel):
-    entity: str
-    count: int
-    connections: List[EntityConnection]
+    results
