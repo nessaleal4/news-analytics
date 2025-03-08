@@ -1,6 +1,5 @@
 """
 Main entry point for Streamlit Cloud deployment
-This file should be placed at the root of your repository for Streamlit Cloud
 """
 
 # Import the main app from the frontend directory
