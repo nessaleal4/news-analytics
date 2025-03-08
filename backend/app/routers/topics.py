@@ -6,8 +6,8 @@ import os
 import json
 import pandas as pd
 
-from app.config import get_settings
-from app.services.topic_model import get_topics, get_topic_articles
+from backend.app.config import get_settings
+from backend.app.services.topic_model import get_topics, get_topic_articles
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
