@@ -2,12 +2,20 @@ app = "news-analytics"
 primary_region = "iad"
 
 [build]
-  # Remove the builder line to use Dockerfile
+  builder = "paketobuildpacks/builder:base"
 
 [env]
   PORT = "8080"
   PYTHONUNBUFFERED = "1"
   DATA_DIR = "/app/data"
+
+# Add this section to explicitly set the command
+[deploy]
+  release_command = "echo 'Release command executed'"
+
+# Add this section to explicitly set the start command
+[processes]
+  web = "uvicorn main:app --host 0.0.0.0 --port 8080"
 
 [http_service]
   internal_port = 8080
@@ -15,6 +23,7 @@ primary_region = "iad"
   auto_stop_machines = true
   auto_start_machines = true
   min_machines_running = 0
+  processes = ["web"]
 
 [mounts]
   source = "news_analytics_data"
