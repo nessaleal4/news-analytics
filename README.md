@@ -43,7 +43,7 @@ news-analytics/
 │       │   ├── search.py
 │       │   ├── topics.py
 │       │   └── knowledge.py
-│       ├── services/            # Business logic
+│       ├── services/            # class project requirements
 │       │   ├── __init__.py
 │       │   ├── embedding.py
 │       │   ├── qdrant.py
