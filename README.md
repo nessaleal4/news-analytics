@@ -18,7 +18,7 @@ The system consists of two main components:
    - Handles embeddings generation
    - Interfaces with Qdrant Cloud for vector search
    - Scrapes news articles
-   - Performs topic modeling
+   - Performs topic modeling (BERTopic)
    - Extracts entities for knowledge graph
    - Exposes APIs for frontend
 
