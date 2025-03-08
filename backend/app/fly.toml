@@ -2,10 +2,10 @@ app = "news-analytics-api"
 primary_region = "iad"
 
 [build]
-  builtin = "python"
+  buildpacks = ["heroku/python"]
 
-[build.settings]
-  python_version = "3.9"
+[processes]
+  web = "uvicorn main:app --host 0.0.0.0 --port 8080"
 
 [http_service]
   internal_port = 8080
