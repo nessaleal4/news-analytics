@@ -1,4 +1,3 @@
-
 from fastapi import APIRouter, Query, HTTPException
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
@@ -6,8 +5,9 @@ import logging
 import pandas as pd
 import os
 import re
-from backend.app.services.embedding import generate_embedding
-from backend.app.services.qdrant import search_qdrant
+from app.config import get_settings
+from app.services.embedding import generate_embedding
+from app.services.qdrant import search_qdrant
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
