@@ -13,3 +13,4 @@ aiohttp==3.9.3
 apscheduler==3.10.4
 python-multipart==0.0.6
 gunicorn==21.2.0
+transformers==4.20.0
