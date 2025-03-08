@@ -5,9 +5,9 @@ from apscheduler.schedulers.background import BackgroundScheduler
 import os
 import logging
 
-from .config import get_settings
-from .routers import search, topics, knowledge
-from .services.scraper import scrape_and_process_news
+from app.config import get_settings
+from app.routers import search, topics, knowledge
+from app.services.scraper import scrape_and_process_news
 
 # Set up logging
 logging.basicConfig(
@@ -46,7 +46,6 @@ scheduler = BackgroundScheduler()
 
 @app.on_event("startup")
 async def startup_event():
-    """Run startup tasks when the application starts"""
     # Initial scraping on startup
     logger.info("Performing initial news scraping...")
     try:
@@ -67,13 +66,11 @@ async def startup_event():
 
 @app.on_event("shutdown")
 def shutdown_event():
-    """Run shutdown tasks when the application stops"""
     scheduler.shutdown()
     logger.info("Shutting down scheduler")
 
 @app.get("/api/health")
 def health_check():
-    """Health check endpoint"""
     return {"status": "healthy"}
 
 if __name__ == "__main__":
