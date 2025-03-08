@@ -16,7 +16,7 @@ The system consists of two main components:
 
 1. **Backend (FastAPI on Fly.io)**
    - Handles embeddings generation
-   - Interfaces with Qdrant for vector search
+   - Interfaces with Qdrant Cloud for vector search
    - Scrapes news articles
    - Performs topic modeling
    - Extracts entities for knowledge graph
