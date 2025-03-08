@@ -1,9 +1,12 @@
 app = "news-analytics-api"
 primary_region = "iad"
 
-[build.args]
-  PYTHON_VERSION = "3.9.18"
-  
+[build]
+  builtin = "python"
+
+[build.settings]
+  python_version = "3.9"
+
 [http_service]
   internal_port = 8080
   force_https = true
