@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     CORS_ORIGINS: list = ["*"]
     
     # Storage paths
-    DATA_DIR: str = "/app/data"
+    DATA_DIR: str = "backend/app/data"
     
     class Config:
         env_file = ".env"
