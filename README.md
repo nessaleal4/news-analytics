@@ -28,19 +28,34 @@ The system consists of two main components:
 
 ## Repository Structure
 
-```
 news-analytics/
-├── backend/                     # FastAPI backend (deploy to Fly.io)
-│   ├── app/                     # Application code
-│   │   ├── __init__.py
-│   │   ├── main.py              # FastAPI entry point
-│   │   ├── config.py            # Configuration
-│   │   ├── routers/             # API route definitions
-│   │   ├── services/            # Business logic
-│   │   └── schemas/             # Data models
-│   ├── fly.toml                 # Fly.io configuration
-│   └── requirements.txt         # Backend dependencies
-├── frontend/                    # Streamlit frontend
-│   ├── app.py                   # Main Streamlit app
-│   ├── utils/                   # Utility functions
-│   │   └── api.py
+├── backend/
+│   ├── app/
+│   │   ├── __init__.py                     # Backend __init__.py
+│   │   ├── main.py                         # FastAPI entry point
+│   │   ├── config.py                       # Configuration settings
+│   │   ├── routers/
+│   │   │   ├── __init__.py                 # Routers __init__.py
+│   │   │   ├── search.py                   # Search endpoints
+│   │   │   ├── topics.py                   # Topic modeling endpoints
+│   │   │   └── knowledge.py                # Knowledge graph endpoints
+│   │   ├── services/
+│   │   │   ├── __init__.py                 # Services __init__.py
+│   │   │   ├── embedding.py                # Embedding generation service
+│   │   │   ├── qdrant.py                   # Qdrant client service
+│   │   │   ├── scraper.py                  # News scraping service
+│   │   │   ├── topic_model.py              # Topic modeling service
+│   │   │   └── knowledge_graph.py          # Knowledge graph service
+│   │   └── schemas/
+│   │       ├── __init__.py                 # Schemas __init__.py
+│   │       └── models.py                   # Pydantic models
+│   ├── requirements.txt                    # Backend dependencies
+│   └── fly.toml                            # Fly.io configuration
+├── frontend/
+│   ├── app.py                              # Main Streamlit app
+│   ├── utils/
+│   │   ├── __init__.py                     # Utils __init__.py
+│   │   └── api.py                          # API client
+│   └── requirements.txt                    # Frontend dependencies
+├── streamlit_app.py                        # Entry point for Streamlit Cloud
+└── README.md                               # Project documentation
