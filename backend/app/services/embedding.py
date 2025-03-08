@@ -1,59 +1,34 @@
-from transformers import AutoTokenizer, AutoModel
-import torch
+from sentence_transformers import SentenceTransformer
 import numpy as np
-import logging
-from typing import List, Union
+from typing import List
 
-logger = logging.getLogger(__name__)
-
-# Global variables for model and tokenizer
+# Global variable for the model
 _model = None
-_tokenizer = None
 
-def get_embedding_model():
-    """Get or initialize the MPNet model"""
-    global _model, _tokenizer
+def get_sentence_transformer_model():
+    """Load and cache the MPNet model for sentence embeddings."""
+    global _model
     if _model is None:
-        logger.info("Loading MPNet model...")
-        model_name = "microsoft/mpnet-base"
-        _tokenizer = AutoTokenizer.from_pretrained(model_name)
-        _model = AutoModel.from_pretrained(model_name)
-        logger.info("MPNet model loaded")
-    
-    return _model, _tokenizer
+        _model = SentenceTransformer("all-mpnet-base-v2")
+    return _model
 
-def mean_pooling(model_output, attention_mask):
-    """Mean Pooling - Take attention mask into account for correct averaging"""
-    token_embeddings = model_output[0]
-    input_mask_expanded = attention_mask.unsqueeze(-1).expand(token_embeddings.size()).float()
-    return torch.sum(token_embeddings * input_mask_expanded, 1) / torch.clamp(input_mask_expanded.sum(1), min=1e-9)
-
-async def generate_embeddings(texts: List[str]) -> np.ndarray:
-    """Generate embeddings for a list of texts using MPNet"""
+def generate_embeddings(texts: List[str]) -> np.ndarray:
+    """Generate embeddings for a list of texts using MPNet."""
     if not texts:
         return np.array([])
-    
-    model, tokenizer = get_embedding_model()
-    
-    # Convert to list of strings if any items are not strings
-    texts = [str(text) if not isinstance(text, str) else text for text in texts]
-    
-    # Tokenize texts
-    encoded_input = tokenizer(texts, padding=True, truncation=True, return_tensors='pt', max_length=512)
-    
-    # Compute token embeddings
-    with torch.no_grad():
-        model_output = model(**encoded_input)
-    
-    # Perform mean pooling
-    sentence_embeddings = mean_pooling(model_output, encoded_input['attention_mask'])
-    
-    # Normalize embeddings
-    sentence_embeddings = torch.nn.functional.normalize(sentence_embeddings, p=2, dim=1)
-    
-    return sentence_embeddings.numpy()
+    model = get_sentence_transformer_model()
+    # Generate embeddings (this is a synchronous call)
+    embeddings = model.encode(texts, show_progress_bar=True)
+    return embeddings
 
-async def generate_embedding(text: str) -> List[float]:
-    """Generate embedding for a single text"""
-    embeddings = await generate_embeddings([text])
+def generate_embedding(text: str) -> List[float]:
+    """Generate an embedding for a single text and return it as a list of floats."""
+    embeddings = generate_embeddings([text])
     return embeddings[0].tolist()
+
+
+# Example usage
+if __name__ == "__main__":
+    sentences = ["This is an example sentence", "Each sentence is converted"]
+    embeddings = generate_embeddings(sentences)
+    print(embeddings)
