@@ -1,4 +1,4 @@
-[news-analytics-vanessa-nlp](https://news-analytics-vanessa-nlp.streamlit.app/)
+UI Access: [news-analytics-vanessa-nlp](https://news-analytics-vanessa-nlp.streamlit.app/)
 
 # News Analytics
 
