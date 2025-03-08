@@ -5,9 +5,9 @@ from apscheduler.schedulers.background import BackgroundScheduler
 import os
 import logging
 
-from app.config import get_settings
-from app.routers import search, topics, knowledge
-from app.services.scraper import scrape_and_process_news
+from .config import get_settings
+from .routers import search, topics, knowledge
+from .services.scraper import scrape_and_process_news
 
 # Set up logging
 logging.basicConfig(
