@@ -22,6 +22,6 @@ primary_region = "iad"  # US East (Virginia)
   destination = "/app/data"
 
 [[vm]]
-  memory = "1gb"
+  memory = "4gb"  # Increase from 1gb to 4gb or higher
   cpu_kind = "shared"
-  cpus = 1
+  cpus = 2  # Increase from 1 to 2 CPUs
