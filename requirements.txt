@@ -7,7 +7,7 @@ pandas==2.2.0
 requests==2.31.0
 beautifulsoup4==4.12.2
 transformers==4.38.1
-sentence-transformers==2.2.2
+sentence-transformers==2.0.0
 bertopic==0.15.0
 hdbscan==0.8.33
 networkx==3.2.1
@@ -20,4 +20,3 @@ aiohttp==3.9.3
 apscheduler==3.10.4
 python-multipart==0.0.6
 gunicorn==21.2.0
-huggingface_hub==0.16.4
