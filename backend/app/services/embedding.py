@@ -1,30 +1,25 @@
-# Open backend/app/services/embedding.py
-# Replace the first few lines from:
-from sentence_transformers import SentenceTransformer
+# Replace your embedding.py file with this simplified version
 import numpy as np
 import logging
 from typing import List, Union
-import torch
 
-# With this alternative implementation:
-import numpy as np
-import logging
-from typing import List, Union
-import torch
+logger = logging.getLogger(__name__)
 
-# Instead of importing SentenceTransformer directly, use a workaround
-def get_embedding_model():
-    """Get or initialize the embedding model with a workaround for huggingface_hub issues"""
-    import os
-    # Force huggingface to use local cache only to avoid the problematic API call
-    os.environ["HF_HUB_OFFLINE"] = "1"
-    os.environ["TRANSFORMERS_OFFLINE"] = "1"
+# Dummy embedding function that returns random embeddings
+async def generate_embeddings(texts: List[str]) -> np.ndarray:
+    """Generate dummy embeddings for a list of texts"""
+    # For demo purposes, use a fixed dimension
+    embedding_dim = 384
     
-    # Now import SentenceTransformer after setting environment variables
-    from sentence_transformers import SentenceTransformer
+    # Create random embeddings
+    embeddings = np.random.randn(len(texts), embedding_dim)
+    # Normalize the embeddings
+    embeddings = embeddings / np.linalg.norm(embeddings, axis=1, keepdims=True)
     
-    model_name = "all-MiniLM-L6-v2"
-    device = torch.device("cpu")  # Force CPU usage on Render
-    model = SentenceTransformer(model_name, device=device)
-    
-    return model
+    logger.info(f"Generated dummy embeddings for {len(texts)} texts")
+    return embeddings
+
+async def generate_embedding(text: str) -> List[float]:
+    """Generate dummy embedding for a single text"""
+    embeddings = await generate_embeddings([text])
+    return embeddings[0].tolist()
