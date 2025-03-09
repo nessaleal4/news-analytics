@@ -68,18 +68,8 @@ def load_local_data():
     
     return local_data
 
-# Initialize session state
-if "api_client" not in st.session_state:
-    # Change API_URL to BACKEND_URL to match the secret name in Streamlit Cloud
-    api_url = st.secrets.get("BACKEND_URL", DEFAULT_API_URL)
-    st.session_state.api_client = APIClient(api_url)
-    
-    # Load local data for fallback
-    st.session_state.local_data = load_local_data()
-    
-    # Initialize use_local_data in session state
-    if "use_local_data" not in st.session_state:
-        st.session_state.use_local_data = False
+# These initializations are now moved to streamlit_app.py
+# to ensure they happen before any functions are called
 
 # Page configuration
 st.set_page_config(
@@ -90,6 +80,20 @@ st.set_page_config(
 )
 
 def main():
+    # Ensure session state is initialized
+    if "api_client" not in st.session_state:
+        # Use a default API URL or get from secrets
+        api_url = DEFAULT_API_URL
+        if hasattr(st, 'secrets') and "BACKEND_URL" in st.secrets:
+            api_url = st.secrets["BACKEND_URL"]
+        st.session_state.api_client = APIClient(api_url)
+    
+    if "use_local_data" not in st.session_state:
+        st.session_state.use_local_data = False
+        
+    if "local_data" not in st.session_state:
+        st.session_state.local_data = load_local_data()
+    
     # Header
     st.title("📰 News Analytics")
     st.markdown("""
@@ -159,21 +163,33 @@ def render_search_page():
     
     # Advanced filters
     with st.expander("Advanced Filters"):
-        # Get categories and sources
-        categories_data = st.session_state.api_client.get_categories()
-        categories = ["All"] + categories_data.get("categories", [])
-        sources = ["All"] + categories_data.get("sources", [])
-        
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            category = st.selectbox("Category", categories, index=0)
-        
-        with col2:
-            source = st.selectbox("Source", sources, index=0)
-        
-        with col3:
-            limit = st.slider("Max Results", 5, 50, 10)
+        try:
+            # Get categories and sources with error handling
+            categories_data = {"categories": [], "sources": []}
+            try:
+                if "api_client" in st.session_state:
+                    categories_data = st.session_state.api_client.get_categories()
+            except Exception as e:
+                st.warning(f"Error loading categories: {e}")
+            
+            categories = ["All"] + categories_data.get("categories", [])
+            sources = ["All"] + categories_data.get("sources", [])
+            
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                category = st.selectbox("Category", categories, index=0)
+            
+            with col2:
+                source = st.selectbox("Source", sources, index=0)
+            
+            with col3:
+                limit = st.slider("Max Results", 5, 50, 10)
+        except Exception as e:
+            st.error(f"Error setting up filters: {e}")
+            category = "All"
+            source = "All"
+            limit = 10
     
     # Search button
     search_pressed = st.button("Search", type="primary")
@@ -181,311 +197,342 @@ def render_search_page():
     # Display results
     if search_pressed and query:
         with st.spinner("Searching..."):
-            # Prepare filter parameters
-            filter_category = None if category == "All" else category
-            filter_source = None if source == "All" else source
-            
-            # Perform search based on type
-            if search_type == "Semantic":
-                results = st.session_state.api_client.semantic_search(query, limit=limit)
-            else:
-                results = st.session_state.api_client.keyword_search(query, limit=limit)
-            
-            # Apply filters if selected
-            if filter_category or filter_source:
-                filtered_results = []
-                for result in results:
-                    payload = result.get("payload", {})
-                    if filter_category and payload.get("category") != filter_category:
-                        continue
-                    if filter_source and payload.get("source") != filter_source:
-                        continue
-                    filtered_results.append(result)
-                results = filtered_results[:limit]
-            
-            # Display results
-            st.subheader(f"Search Results ({len(results)})")
-            
-            if not results:
-                st.info("No results found. Try a different query or search type.")
-            
-            for result in results:
-                score = result.get("score", 0)
-                payload = result.get("payload", {})
+            try:
+                # Prepare filter parameters
+                filter_category = None if category == "All" else category
+                filter_source = None if source == "All" else source
                 
-                with st.container():
-                    col1, col2 = st.columns([5, 1])
+                # Perform search based on type
+                if search_type == "Semantic":
+                    results = st.session_state.api_client.semantic_search(query, limit=limit)
+                else:
+                    results = st.session_state.api_client.keyword_search(query, limit=limit)
+                
+                # Apply filters if selected
+                if filter_category or filter_source:
+                    filtered_results = []
+                    for result in results:
+                        payload = result.get("payload", {})
+                        if filter_category and payload.get("category") != filter_category:
+                            continue
+                        if filter_source and payload.get("source") != filter_source:
+                            continue
+                        filtered_results.append(result)
+                    results = filtered_results[:limit]
+                
+                # Display results
+                st.subheader(f"Search Results ({len(results)})")
+                
+                if not results:
+                    st.info("No results found. Try a different query or search type.")
+                
+                for result in results:
+                    score = result.get("score", 0)
+                    payload = result.get("payload", {})
                     
-                    with col1:
-                        st.markdown(f"### {payload.get('title', 'No Title')}")
-                    
-                    with col2:
-                        st.text(f"Score: {score:.2f}")
-                    
-                    st.markdown(f"**Source:** {payload.get('source', 'Unknown')} | **Category:** {payload.get('category', 'Unknown')}")
-                    st.markdown(f"{payload.get('description', '')[:500]}...")
-                    
-                    if payload.get("url"):
-                        st.markdown(f"[Read more]({payload.get('url')})")
-                    
-                    st.markdown("---")
+                    with st.container():
+                        col1, col2 = st.columns([5, 1])
+                        
+                        with col1:
+                            st.markdown(f"### {payload.get('title', 'No Title')}")
+                        
+                        with col2:
+                            st.text(f"Score: {score:.2f}")
+                        
+                        st.markdown(f"**Source:** {payload.get('source', 'Unknown')} | **Category:** {payload.get('category', 'Unknown')}")
+                        st.markdown(f"{payload.get('description', '')[:500]}...")
+                        
+                        if payload.get("url"):
+                            st.markdown(f"[Read more]({payload.get('url')})")
+                        
+                        st.markdown("---")
+            except Exception as e:
+                st.error(f"Error during search: {e}")
     else:
         # Show recent articles
         st.subheader("Recent Articles")
         
         with st.spinner("Loading recent articles..."):
-            recent = st.session_state.api_client.get_recent_articles(limit=5)
-            
-            if not recent:
-                st.info("No recent articles available. The API may be unavailable or still initializing.")
-            
-            for result in recent:
-                payload = result.get("payload", {})
+            try:
+                recent = []
+                if "api_client" in st.session_state:
+                    recent = st.session_state.api_client.get_recent_articles(limit=5)
                 
-                with st.container():
-                    st.markdown(f"### {payload.get('title', 'No Title')}")
-                    st.markdown(f"**Source:** {payload.get('source', 'Unknown')} | **Category:** {payload.get('category', 'Unknown')}")
-                    st.markdown(f"{payload.get('description', '')[:300]}...")
+                if not recent:
+                    st.info("No recent articles available. The API may be unavailable or still initializing.")
+                
+                for result in recent:
+                    payload = result.get("payload", {})
                     
-                    if payload.get("url"):
-                        st.markdown(f"[Read more]({payload.get('url')})")
-                    
-                    st.markdown("---")
+                    with st.container():
+                        st.markdown(f"### {payload.get('title', 'No Title')}")
+                        st.markdown(f"**Source:** {payload.get('source', 'Unknown')} | **Category:** {payload.get('category', 'Unknown')}")
+                        st.markdown(f"{payload.get('description', '')[:300]}...")
+                        
+                        if payload.get("url"):
+                            st.markdown(f"[Read more]({payload.get('url')})")
+                        
+                        st.markdown("---")
+            except Exception as e:
+                st.error(f"Error loading recent articles: {e}")
 
 def render_topics_page():
     st.header("News Topics")
     
     # Get topic summary
     with st.spinner("Loading topic data..."):
-        topic_summary = st.session_state.api_client.get_topic_summary()
-        topics = st.session_state.api_client.get_topics()
-    
-    # Display summary metrics
-    total_articles = topic_summary.get("total_articles", 0)
-    total_topics = len(topics)
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.metric("Total Articles", total_articles)
-    
-    with col2:
-        st.metric("Total Topics", total_topics)
-    
-    # Topic visualization
-    if topics:
-        # Prepare data for chart
-        chart_data = []
-        for topic in topics:
-            chart_data.append({
-                "Topic": f"Topic {topic.get('id')}",
-                "Count": topic.get("count", 0),
-                "ID": topic.get("id")
-            })
-        
-        df_chart = pd.DataFrame(chart_data)
-        
-        # Sort by count
-        df_chart = df_chart.sort_values("Count", ascending=False)
-        
-        # Create bar chart
-        fig = px.bar(
-            df_chart, 
-            x="Topic", 
-            y="Count",
-            title="Articles by Topic",
-            color="Count",
-            color_continuous_scale="Viridis"
-        )
-        
-        st.plotly_chart(fig, use_container_width=True)
-        
-        # Topic details
-        st.subheader("Topic Details")
-        
-        # Select topic
-        topic_options = [f"Topic {t.get('id')}: {t.get('keywords', [])[0]['word'] if t.get('keywords') else ''}" 
-                         for t in topics]
-        selected_topic = st.selectbox("Select a topic to explore", topic_options)
-        
-        if selected_topic:
-            # Extract topic ID
-            topic_id = int(selected_topic.split(':')[0].replace('Topic ', '').strip())
+        try:
+            topic_summary = {"total_articles": 0, "total_topics": 0}
+            topics = []
             
-            # Find selected topic
-            topic = next((t for t in topics if t.get('id') == topic_id), None)
+            if "api_client" in st.session_state:
+                topic_summary = st.session_state.api_client.get_topic_summary()
+                topics = st.session_state.api_client.get_topics()
             
-            if topic:
-                # Display keywords
-                st.markdown("#### Top Keywords")
-                
-                keywords = topic.get("keywords", [])
-                keyword_data = []
-                
-                for kw in keywords:
-                    keyword_data.append({
-                        "Keyword": kw.get("word", ""),
-                        "Score": kw.get("score", 0)
+            # Display summary metrics
+            total_articles = topic_summary.get("total_articles", 0)
+            total_topics = len(topics)
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.metric("Total Articles", total_articles)
+            
+            with col2:
+                st.metric("Total Topics", total_topics)
+            
+            # Topic visualization
+            if topics:
+                # Prepare data for chart
+                chart_data = []
+                for topic in topics:
+                    chart_data.append({
+                        "Topic": f"Topic {topic.get('id')}",
+                        "Count": topic.get("count", 0),
+                        "ID": topic.get("id")
                     })
                 
-                df_keywords = pd.DataFrame(keyword_data)
+                df_chart = pd.DataFrame(chart_data)
                 
-                # Create horizontal bar chart for keywords
+                # Sort by count
+                df_chart = df_chart.sort_values("Count", ascending=False)
+                
+                # Create bar chart
                 fig = px.bar(
-                    df_keywords,
-                    x="Score",
-                    y="Keyword",
-                    orientation='h',
-                    title=f"Keywords for Topic {topic_id}",
-                    color="Score",
+                    df_chart, 
+                    x="Topic", 
+                    y="Count",
+                    title="Articles by Topic",
+                    color="Count",
                     color_continuous_scale="Viridis"
                 )
                 
                 st.plotly_chart(fig, use_container_width=True)
                 
-                # Display articles for this topic
-                st.markdown("#### Articles in this Topic")
+                # Topic details
+                st.subheader("Topic Details")
                 
-                with st.spinner("Loading topic articles..."):
-                    articles = st.session_state.api_client.get_topic_articles(topic_id)
+                # Select topic
+                topic_options = []
+                for t in topics:
+                    keywords = t.get('keywords', [])
+                    first_keyword = keywords[0]['word'] if keywords else ''
+                    topic_options.append(f"Topic {t.get('id')}: {first_keyword}")
                 
-                for article in articles:
-                    with st.container():
-                        st.markdown(f"### {article.get('title', 'No Title')}")
-                        st.markdown(f"**Source:** {article.get('source', 'Unknown')} | **Category:** {article.get('category', 'Unknown')}")
-                        st.markdown(f"{article.get('description', '')[:300]}...")
+                if topic_options:
+                    selected_topic = st.selectbox("Select a topic to explore", topic_options)
+                    
+                    if selected_topic:
+                        # Extract topic ID
+                        topic_id = int(selected_topic.split(':')[0].replace('Topic ', '').strip())
                         
-                        if article.get("url"):
-                            st.markdown(f"[Read more]({article.get('url')})")
+                        # Find selected topic
+                        topic = next((t for t in topics if t.get('id') == topic_id), None)
                         
-                        st.markdown("---")
-    else:
-        st.info("No topic data available. The API may be unavailable or still initializing.")
+                        if topic:
+                            # Display keywords
+                            st.markdown("#### Top Keywords")
+                            
+                            keywords = topic.get("keywords", [])
+                            keyword_data = []
+                            
+                            for kw in keywords:
+                                keyword_data.append({
+                                    "Keyword": kw.get("word", ""),
+                                    "Score": kw.get("score", 0)
+                                })
+                            
+                            df_keywords = pd.DataFrame(keyword_data)
+                            
+                            # Create horizontal bar chart for keywords
+                            fig = px.bar(
+                                df_keywords,
+                                x="Score",
+                                y="Keyword",
+                                orientation='h',
+                                title=f"Keywords for Topic {topic_id}",
+                                color="Score",
+                                color_continuous_scale="Viridis"
+                            )
+                            
+                            st.plotly_chart(fig, use_container_width=True)
+                            
+                            # Display articles for this topic
+                            st.markdown("#### Articles in this Topic")
+                            
+                            with st.spinner("Loading topic articles..."):
+                                articles = st.session_state.api_client.get_topic_articles(topic_id)
+                            
+                            for article in articles:
+                                with st.container():
+                                    st.markdown(f"### {article.get('title', 'No Title')}")
+                                    st.markdown(f"**Source:** {article.get('source', 'Unknown')} | **Category:** {article.get('category', 'Unknown')}")
+                                    st.markdown(f"{article.get('description', '')[:300]}...")
+                                    
+                                    if article.get("url"):
+                                        st.markdown(f"[Read more]({article.get('url')})")
+                                    
+                                    st.markdown("---")
+            else:
+                st.info("No topic data available. The API may be unavailable or still initializing.")
+        except Exception as e:
+            st.error(f"Error loading topic data: {e}")
 
 def render_knowledge_graph_page():
     st.header("Knowledge Graph")
     
     # Get knowledge graph data
     with st.spinner("Loading knowledge graph..."):
-        graph = st.session_state.api_client.get_knowledge_graph()
-        graph_stats = st.session_state.api_client.get_graph_stats()
-    
-    # Display stats
-    total_entities = graph_stats.get("total_entities", 0)
-    total_connections = graph_stats.get("total_connections", 0)
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.metric("Total Entities", total_entities)
-    
-    with col2:
-        st.metric("Total Connections", total_connections)
-    
-    # Entity exploration
-    st.subheader("Entity Explorer")
-    
-    # Get top entities
-    with st.spinner("Loading entities..."):
-        entities = st.session_state.api_client.get_top_entities()
-    
-    if entities:
-        # Prepare entity options
-        entity_options = [f"{e.get('id')} ({e.get('count', 0)})" for e in entities]
-        selected_entity = st.selectbox("Select an entity to explore", entity_options)
-        
-        if selected_entity:
-            # Extract entity name
-            entity_name = selected_entity.split(' (')[0]
+        try:
+            graph = {"nodes": [], "links": []}
+            graph_stats = {"total_entities": 0, "total_connections": 0}
             
-            # Get entity connections
-            with st.spinner(f"Loading connections for {entity_name}..."):
-                entity_data = st.session_state.api_client.get_entity_connections(entity_name)
+            if "api_client" in st.session_state:
+                graph = st.session_state.api_client.get_knowledge_graph()
+                graph_stats = st.session_state.api_client.get_graph_stats()
             
-            # Display entity info
-            st.markdown(f"#### {entity_name}")
-            st.markdown(f"**Mentions:** {entity_data.get('count', 0)}")
+            # Display stats
+            total_entities = graph_stats.get("total_entities", 0)
+            total_connections = graph_stats.get("total_connections", 0)
             
-            # Display connections
-            connections = entity_data.get("connections", [])
+            col1, col2 = st.columns(2)
             
-            if connections:
-                st.markdown("#### Connected Entities")
+            with col1:
+                st.metric("Total Entities", total_entities)
+            
+            with col2:
+                st.metric("Total Connections", total_connections)
+            
+            # Entity exploration
+            st.subheader("Entity Explorer")
+            
+            # Get top entities
+            entities = []
+            if "api_client" in st.session_state:
+                entities = st.session_state.api_client.get_top_entities()
+            
+            if entities:
+                # Prepare entity options
+                entity_options = [f"{e.get('id')} ({e.get('count', 0)})" for e in entities]
+                selected_entity = st.selectbox("Select an entity to explore", entity_options)
                 
-                # Prepare data for chart
-                conn_data = []
-                for conn in connections:
-                    conn_data.append({
-                        "Entity": conn.get("entity", ""),
-                        "Strength": conn.get("strength", 0)
-                    })
-                
-                df_conn = pd.DataFrame(conn_data)
-                
-                # Sort and limit
-                df_conn = df_conn.sort_values("Strength", ascending=False).head(10)
-                
-                # Create bar chart
-                fig = px.bar(
-                    df_conn,
-                    x="Entity",
-                    y="Strength",
-                    title=f"Top Connections for {entity_name}",
-                    color="Strength",
-                    color_continuous_scale="Viridis"
-                )
-                
-                st.plotly_chart(fig, use_container_width=True)
+                if selected_entity:
+                    # Extract entity name
+                    entity_name = selected_entity.split(' (')[0]
+                    
+                    # Get entity connections
+                    with st.spinner(f"Loading connections for {entity_name}..."):
+                        entity_data = st.session_state.api_client.get_entity_connections(entity_name)
+                    
+                    # Display entity info
+                    st.markdown(f"#### {entity_name}")
+                    st.markdown(f"**Mentions:** {entity_data.get('count', 0)}")
+                    
+                    # Display connections
+                    connections = entity_data.get("connections", [])
+                    
+                    if connections:
+                        st.markdown("#### Connected Entities")
+                        
+                        # Prepare data for chart
+                        conn_data = []
+                        for conn in connections:
+                            conn_data.append({
+                                "Entity": conn.get("entity", ""),
+                                "Strength": conn.get("strength", 0)
+                            })
+                        
+                        df_conn = pd.DataFrame(conn_data)
+                        
+                        # Sort and limit
+                        df_conn = df_conn.sort_values("Strength", ascending=False).head(10)
+                        
+                        # Create bar chart
+                        fig = px.bar(
+                            df_conn,
+                            x="Entity",
+                            y="Strength",
+                            title=f"Top Connections for {entity_name}",
+                            color="Strength",
+                            color_continuous_scale="Viridis"
+                        )
+                        
+                        st.plotly_chart(fig, use_container_width=True)
+                    else:
+                        st.info(f"No connections found for {entity_name}")
             else:
-                st.info(f"No connections found for {entity_name}")
-    else:
-        st.info("No entity data available. The API may be unavailable or still initializing.")
-    
-    # Knowledge Graph Visualization
-    st.subheader("Graph Visualization")
-    
-    if graph.get("nodes") and graph.get("links"):
-        # Create network visualization with pyvis
-        from pyvis.network import Network
-        import streamlit.components.v1 as components
-        
-        # Create network
-        net = Network(height="600px", width="100%", notebook=True, directed=False)
-        
-        # Add nodes
-        for node in graph.get("nodes", [])[:50]:  # Limit to 50 nodes for performance
-            node_id = node.get("id", "")
-            net.add_node(
-                node_id, 
-                label=node_id,
-                title=f"{node_id} (Mentions: {node.get('count', 0)})",
-                size=10 + (node.get("count", 1) * 2)
-            )
-        
-        # Add edges
-        for link in graph.get("links", [])[:100]:  # Limit to 100 edges
-            source = link.get("source", "")
-            target = link.get("target", "")
-            value = link.get("value", 1)
+                st.info("No entity data available. The API may be unavailable or still initializing.")
             
-            if source in [node.get("id") for node in graph.get("nodes", [])[:50]] and \
-               target in [node.get("id") for node in graph.get("nodes", [])[:50]]:
-                net.add_edge(source, target, value=value, width=1 + value)
-        
-        # Set physics layout
-        net.barnes_hut(spring_length=200)
-        
-        # Generate HTML
-        html_path = "knowledge_graph.html"
-        net.save_graph(html_path)
-        
-        # Display in Streamlit
-        with open(html_path, 'r', encoding='utf-8') as f:
-            html = f.read()
-        
-        components.html(html, height=600)
-    else:
-        st.info("No graph data available for visualization. The API may be unavailable or still initializing.")
+            # Knowledge Graph Visualization
+            st.subheader("Graph Visualization")
+            
+            if graph.get("nodes") and graph.get("links"):
+                try:
+                    # Create network visualization with pyvis
+                    from pyvis.network import Network
+                    import streamlit.components.v1 as components
+                    
+                    # Create network
+                    net = Network(height="600px", width="100%", notebook=True, directed=False)
+                    
+                    # Add nodes
+                    for node in graph.get("nodes", [])[:50]:  # Limit to 50 nodes for performance
+                        node_id = node.get("id", "")
+                        net.add_node(
+                            node_id, 
+                            label=node_id,
+                            title=f"{node_id} (Mentions: {node.get('count', 0)})",
+                            size=10 + (node.get("count", 1) * 2)
+                        )
+                    
+                    # Add edges
+                    for link in graph.get("links", [])[:100]:  # Limit to 100 edges
+                        source = link.get("source", "")
+                        target = link.get("target", "")
+                        value = link.get("value", 1)
+                        
+                        if source in [node.get("id") for node in graph.get("nodes", [])[:50]] and \
+                        target in [node.get("id") for node in graph.get("nodes", [])[:50]]:
+                            net.add_edge(source, target, value=value, width=1 + value)
+                    
+                    # Set physics layout
+                    net.barnes_hut(spring_length=200)
+                    
+                    # Generate HTML
+                    html_path = "knowledge_graph.html"
+                    net.save_graph(html_path)
+                    
+                    # Display in Streamlit
+                    with open(html_path, 'r', encoding='utf-8') as f:
+                        html = f.read()
+                    
+                    components.html(html, height=600)
+                except Exception as e:
+                    st.error(f"Error generating graph visualization: {e}")
+            else:
+                st.info("No graph data available for visualization. The API may be unavailable or still initializing.")
+        except Exception as e:
+            st.error(f"Error loading knowledge graph: {e}")
 
 def render_about_page():
     st.header("About News Analytics")
@@ -528,18 +575,21 @@ def render_about_page():
     
     try:
         # Simple check if API is responsive
-        start_time = time.time()
-        _ = st.session_state.api_client.get_recent_articles(limit=1)
-        end_time = time.time()
-        
-        response_time = round((end_time - start_time) * 1000)
-        
-        st.success(f"API is online. Response time: {response_time}ms")
+        if "api_client" in st.session_state:
+            start_time = time.time()
+            _ = st.session_state.api_client.get_recent_articles(limit=1)
+            end_time = time.time()
+            
+            response_time = round((end_time - start_time) * 1000)
+            
+            st.success(f"API is online. Response time: {response_time}ms")
+        else:
+            st.error("API client not initialized")
     except Exception as e:
         st.error(f"API is offline or experiencing issues: {str(e)}")
         
         # Show local data status
-        if st.session_state.local_data["news_articles"] is not None:
+        if "local_data" in st.session_state and st.session_state.local_data["news_articles"] is not None:
             st.success(f"Using local data: {len(st.session_state.local_data['news_articles'])} articles available")
         else:
             st.warning("No local data available. Both API and local fallback are unavailable.")
