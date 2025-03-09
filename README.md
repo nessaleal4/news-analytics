@@ -1,141 +1,112 @@
-UI Access: [news-analytics-vanessa-nlp](https://news-analytics-vanessa-nlp.streamlit.app/)
-
 # News Analytics
 
-A full-stack news analytics application with semantic search, topic modeling, and knowledge graph visualization.
-
-## Project Overview
-
-This application provides tools for analyzing news articles using modern NLP techniques:
-
-- **Semantic Search**: Find relevant articles based on meaning, not just keywords
-- **Topic Modeling**: Discover themes and topics across news articles
-- **Knowledge Graph**: Explore connections between entities mentioned in the news
+A comprehensive platform for analyzing news articles using NLP techniques, featuring topic modeling, semantic search, and knowledge graph visualization.
 
 ## Architecture
 
-The system consists of two main components:
+This project consists of two main components:
 
-1. **Backend (FastAPI on Fly.io)**
-   - Handles embeddings generation
-   - Interfaces with Qdrant for vector search
-   - Scrapes news articles
-   - Performs topic modeling
-   - Extracts entities for knowledge graph
-   - Exposes APIs for frontend
+- **Backend**: A FastAPI application that provides API endpoints for news scraping, topic modeling, semantic search, and knowledge graph generation.
+- **Frontend**: A Streamlit application that provides a user-friendly interface for exploring the analyzed news data.
 
-2. **Frontend (Streamlit)**
-   - Provides user interface for all features
-   - Connects to backend API for data
-
-## Repository Structure
+## Directory Structure
 
 ```
 news-analytics/
-├── backend/
-│   └── app/                     # FastAPI application
-│       ├── __init__.py
-│       ├── main.py              # FastAPI entry point
-│       ├── config.py            # Configuration
-│       ├── Dockerfile           # Docker configuration for Fly.io
-│       ├── fly.toml             # Fly.io configuration
-│       ├── requirements.txt     # Backend dependencies
-│       ├── routers/             # API route definitions
-│       │   ├── __init__.py
-│       │   ├── search.py
-│       │   ├── topics.py
-│       │   └── knowledge.py
-│       ├── services/            # Business logic
-│       │   ├── __init__.py
-│       │   ├── embedding.py
-│       │   ├── qdrant.py
-│       │   ├── scraper.py
-│       │   ├── topic_model.py
-│       │   └── knowledge_graph.py
-│       └── schemas/             # Data models
-│           ├── __init__.py
-│           └── models.py
-├── frontend/
-│   ├── app.py                   # Main Streamlit app
-│   ├── requirements.txt         # Frontend dependencies
-│   └── utils/                   # Utility functions
-│       ├── __init__.py
-│       └── api.py               # API client for backend
-└── streamlit_app.py             # Entry point for Streamlit Cloud
+│
+├── backend/                  # FastAPI backend
+│   ├── app/                  # Main application code
+│   │   ├── __init__.py
+│   │   ├── main.py           # FastAPI entry point
+│   │   ├── config.py         # Configuration settings
+│   │   ├── routers/          # API route definitions
+│   │   ├── schemas/          # Data models
+│   │   └── services/         # Business logic
+│   ├── requirements.txt      # Backend dependencies
+│   └── railway.json          # Railway deployment configuration
+│
+├── frontend/                 # Streamlit frontend
+│   ├── app.py                # Main Streamlit application
+│   ├── utils/                # Utility functions
+│   │   └── api.py            # API client for backend communication
+│   └── requirements.txt      # Frontend dependencies
+│
+├── streamlit_app.py          # Entry point for Streamlit Cloud
+└── README.md                 # Project documentation
 ```
 
-## Deployment Instructions
+## Features
 
-### 1. Deploy Backend to Fly.io
+- **Semantic Search**: Find relevant news articles based on meaning, not just keywords
+- **Topic Modeling**: Discover themes and topics across news articles using BERTopic
+- **Knowledge Graph**: Visualize connections between entities mentioned in the news
+- **Real-time Scraping**: Automatically scrape and process news articles every 12 hours
 
-1. **Fork or clone this repository to your GitHub account**
+## Technology Stack
 
-2. **Deploy using Fly.io Dashboard**
-   - Log in to [Fly.io](https://fly.io/dashboard)
-   - Click "Create App"
-   - Choose "Deploy from GitHub repository"
-   - Select your news-analytics repository
-   - Specify `backend/app` as the Current Working Directory
-   - Select "None" when asked about PostgreSQL
-   - Create a volume for data storage with:
-     ```
-     fly volumes create news_analytics_data --size 1 --region <your-region>
-     ```
+- **Backend**:
+  - FastAPI: Modern, high-performance web framework
+  - Sentence Transformers: For generating embeddings
+  - BERTopic: For topic modeling
+  - spaCy & NLTK: For NLP tasks and entity extraction
+  - Qdrant: Vector database for semantic search
+  - Deployed on Railway
 
-3. **Verify the deployment**
-   - Once deployed, Fly.io will provide a URL for your application (e.g., `https://news-analytics.fly.dev`)
-   - Test the health endpoint: `https://news-analytics.fly.dev/api/health`
+- **Frontend**:
+  - Streamlit: For interactive data visualization
+  - Plotly: For charts and graphs
+  - PyVis: For network visualization
+  - Deployed on Streamlit Cloud
 
-### 2. Deploy Frontend to Streamlit Cloud
+## Deployment
 
-1. **Connect Streamlit Cloud to your GitHub repository**
-   - Log in to [Streamlit Cloud](https://streamlit.io/cloud)
-   - Click "New app"
-   - Connect to your GitHub repository
-   - Select `streamlit_app.py` as the main app
+### Backend (Railway)
 
-2. **Configure the deployment**
-   - Set the Python version (3.9+ recommended)
-   - Add the following secrets in the Streamlit dashboard:
-     - `API_URL`: Your Fly.io backend URL (e.g., `https://news-analytics.fly.dev`)
+The backend is deployed on Railway with the following environment variables:
 
-3. **Deploy the application**
-   - Click "Deploy"
-   - Streamlit will build and deploy your application
+- `QDRANT_URL`: URL for Qdrant vector database
+- `QDRANT_API_KEY`: API key for Qdrant authentication
+- `QDRANT_COLLECTION_NAME`: Name of the collection in Qdrant
+- `EMBEDDING_MODEL`: Name of the Sentence Transformer model
+- `DATA_DIR`: Directory for storing processed data
+- `SCRAPE_INTERVAL_HOURS`: Interval for scraping news (in hours)
+- `MIN_ARTICLES_PER_SOURCE`: Minimum number of articles to scrape per source
+- `CORS_ORIGINS`: CORS configuration
 
-## Using the Application
+### Frontend (Streamlit Cloud)
 
-### Search Engine
+The frontend is deployed on Streamlit Cloud with the following configuration:
 
-The search engine provides two methods to find articles:
+- Main file path: `streamlit_app.py`
+- Required secret: `BACKEND_URL` (URL of the Railway-deployed backend)
 
-1. **Semantic Search**: Uses vector embeddings to find articles based on meaning
-2. **Keyword Search**: Finds articles containing specific words or phrases
+## Local Development
 
-### Topics
+### Backend
 
-The topics feature allows you to:
+```bash
+cd backend
+pip install -r requirements.txt
+uvicorn app.main:app --reload
+```
 
-1. View top topics detected in the news
-2. Explore keywords associated with each topic
-3. Browse articles related to specific topics
+### Frontend
 
-### Knowledge Graph
+```bash
+cd frontend
+pip install -r requirements.txt
+streamlit run app.py
+```
 
-The knowledge graph visualizes connections between entities mentioned in news articles:
+## API Documentation
 
-1. Explore important people, organizations, and places
-2. View relationship strength between connected entities
-3. Analyze the overall knowledge network
+When running locally or on Railway, API documentation is available at:
 
-## Technologies Used
+- Swagger UI: `/docs`
+- ReDoc: `/redoc`
 
-- **Backend**: FastAPI, BERTopic, spaCy, Qdrant, Sentence Transformers
-- **Frontend**: Streamlit, Plotly, Pyvis
-- **Data Storage**: Qdrant Cloud (vector database)
-- **Deployment**: Fly.io, Streamlit Cloud
+## Credits
 
-## Acknowledgments
-
-This project was developed as part of a data science course assignment.
-This project was developed as part of a data science course in Natural Language Processing assignment.
+This project uses:
+- CNN for news data
+- Several open-source libraries for NLP and data visualization
