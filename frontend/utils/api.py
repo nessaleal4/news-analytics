@@ -298,9 +298,15 @@ class APIClient:
         if not topic_info:
             return {"total_articles": len(st.session_state.local_data["news_articles"]), "total_topics": 0}
         
+        # Handle both list and dictionary formats
+        if isinstance(topic_info, list):
+            topics_count = len(topic_info)
+        else:
+            topics_count = len(topic_info)
+            
         return {
             "total_articles": len(st.session_state.local_data["news_articles"]),
-            "total_topics": len(topic_info)
+            "total_topics": topics_count
         }
     
     def get_topics(self) -> List[Dict[str, Any]]:
@@ -334,20 +340,51 @@ class APIClient:
         
         # Combine topic info with keywords
         topics = []
-        for topic_id, info in topic_info.items():
-            topic_id_int = int(topic_id)
-            
-            # Get keywords for this topic if available
-            keywords = []
-            if topic_keywords and str(topic_id_int) in topic_keywords:
-                for word, score in topic_keywords[str(topic_id_int)]:
-                    keywords.append({"word": word, "score": score})
-            
-            topics.append({
-                "id": topic_id_int,
-                "count": info.get("count", 0),
-                "keywords": keywords
-            })
+        try:
+            # Check if topic_info is a list (from JSON format)
+            if isinstance(topic_info, list):
+                for topic in topic_info:
+                    topic_id = topic.get("Topic", -1)
+                    topic_id_str = str(topic_id)
+                    
+                    # Get keywords for this topic if available
+                    keywords = []
+                    if topic_id_str in topic_keywords:
+                        for item in topic_keywords[topic_id_str]:
+                            keywords.append({"word": item["word"], "score": item["score"]})
+                    
+                    topics.append({
+                        "id": topic_id,
+                        "count": topic.get("Count", 0),
+                        "keywords": keywords,
+                        "name": topic.get("Name", f"Topic {topic_id}")
+                    })
+            else:
+                # Dictionary format processing
+                for topic_id, info in topic_info.items():
+                    topic_id_int = int(topic_id)
+                    
+                    # Get keywords for this topic if available
+                    keywords = []
+                    if topic_keywords and str(topic_id_int) in topic_keywords:
+                        for item in topic_keywords[str(topic_id_int)]:
+                            if isinstance(item, dict):
+                                # Handle the case where items are already dictionaries
+                                keywords.append({"word": item["word"], "score": item["score"]})
+                            else:
+                                # Handle the case where items are [word, score] pairs
+                                word, score = item
+                                keywords.append({"word": word, "score": score})
+                    
+                    topics.append({
+                        "id": topic_id_int,
+                        "count": info.get("count", 0) if isinstance(info, dict) else info,
+                        "keywords": keywords
+                    })
+        except Exception as e:
+            self.logger.error(f"Error processing topic data: {e}")
+            st.error(f"Error processing topic data: {e}")
+            return []
         
         return topics
     
@@ -410,7 +447,24 @@ class APIClient:
         if not hasattr(st.session_state, "local_data") or st.session_state.local_data["knowledge_graph"] is None:
             return {"nodes": [], "links": []}
         
-        return st.session_state.local_data["knowledge_graph"]
+        try:
+            graph = st.session_state.local_data["knowledge_graph"]
+            
+            # If topic_keywords are available, enhance node labels
+            if st.session_state.local_data["topic_keywords"]:
+                topic_keywords = st.session_state.local_data["topic_keywords"]
+                
+                for node in graph.get("nodes", []):
+                    node_id = node.get("id", "")
+                    if node_id in topic_keywords:
+                        # Get the first keyword to use as label
+                        first_keyword = topic_keywords[node_id][0]["word"] if topic_keywords[node_id] else ""
+                        node["label"] = f"Topic {node_id}: {first_keyword}"
+            
+            return graph
+        except Exception as e:
+            self.logger.error(f"Error processing knowledge graph: {e}")
+            return {"nodes": [], "links": []}
     
     def get_graph_stats(self) -> Dict[str, Any]:
         """Get statistics about the knowledge graph"""
