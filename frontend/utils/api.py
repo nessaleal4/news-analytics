@@ -258,3 +258,273 @@ class APIClient:
         
         # Sort by date if available
         if 'scrape_date' in df.columns:
+            df = df.sort_values('scrape_date', ascending=False)
+        
+        # Convert to list of results
+        results = []
+        for i, row in df.head(limit).iterrows():
+            results.append({
+                "score": 1.0,  # Default score for filtered results
+                "payload": row.to_dict()
+            })
+        
+        return results
+    
+    def get_topic_summary(self) -> Dict[str, Any]:
+        """Get topic modeling summary"""
+        if hasattr(st.session_state, "use_local_data") and st.session_state.use_local_data:
+            # Use local data
+            return self._get_local_topic_summary()
+        
+        # Try API first
+        try:
+            url = f"{self.base_url}/api/topics/summary"
+            
+            response = requests.get(url, timeout=10)
+            data = self._handle_response(response)
+            return data
+        except Exception as e:
+            self.logger.error(f"Error getting topic summary: {e}")
+            # Fallback to local data
+            return self._get_local_topic_summary()
+    
+    def _get_local_topic_summary(self) -> Dict[str, Any]:
+        """Get topic summary from local data"""
+        if not hasattr(st.session_state, "local_data") or st.session_state.local_data["news_articles"] is None:
+            return {"total_articles": 0, "total_topics": 0}
+        
+        topic_info = st.session_state.local_data["topic_info"]
+        
+        if not topic_info:
+            return {"total_articles": len(st.session_state.local_data["news_articles"]), "total_topics": 0}
+        
+        return {
+            "total_articles": len(st.session_state.local_data["news_articles"]),
+            "total_topics": len(topic_info)
+        }
+    
+    def get_topics(self) -> List[Dict[str, Any]]:
+        """Get topics with their keywords and counts"""
+        if hasattr(st.session_state, "use_local_data") and st.session_state.use_local_data:
+            # Use local data
+            return self._get_local_topics()
+        
+        # Try API first
+        try:
+            url = f"{self.base_url}/api/topics/list"
+            
+            response = requests.get(url, timeout=10)
+            data = self._handle_response(response)
+            return data.get("topics", [])
+        except Exception as e:
+            self.logger.error(f"Error getting topics: {e}")
+            # Fallback to local data
+            return self._get_local_topics()
+    
+    def _get_local_topics(self) -> List[Dict[str, Any]]:
+        """Get topics from local data"""
+        if not hasattr(st.session_state, "local_data"):
+            return []
+        
+        topic_info = st.session_state.local_data["topic_info"]
+        topic_keywords = st.session_state.local_data["topic_keywords"]
+        
+        if not topic_info or not topic_keywords:
+            return []
+        
+        # Combine topic info with keywords
+        topics = []
+        for topic_id, info in topic_info.items():
+            topic_id_int = int(topic_id)
+            
+            # Get keywords for this topic if available
+            keywords = []
+            if topic_keywords and str(topic_id_int) in topic_keywords:
+                for word, score in topic_keywords[str(topic_id_int)]:
+                    keywords.append({"word": word, "score": score})
+            
+            topics.append({
+                "id": topic_id_int,
+                "count": info.get("count", 0),
+                "keywords": keywords
+            })
+        
+        return topics
+    
+    def get_topic_articles(self, topic_id: int, limit: int = 10) -> List[Dict[str, Any]]:
+        """Get articles for a specific topic"""
+        if hasattr(st.session_state, "use_local_data") and st.session_state.use_local_data:
+            # Use local data
+            return self._get_local_topic_articles(topic_id, limit)
+        
+        # Try API first
+        try:
+            url = f"{self.base_url}/api/topics/{topic_id}/articles"
+            params = {"limit": limit}
+            
+            response = requests.get(url, params=params, timeout=10)
+            data = self._handle_response(response)
+            return data.get("articles", [])
+        except Exception as e:
+            self.logger.error(f"Error getting topic articles: {e}")
+            # Fallback to local data
+            return self._get_local_topic_articles(topic_id, limit)
+    
+    def _get_local_topic_articles(self, topic_id: int, limit: int = 10) -> List[Dict[str, Any]]:
+        """Get articles for a topic from local data"""
+        if not hasattr(st.session_state, "local_data") or st.session_state.local_data["news_articles"] is None:
+            return []
+        
+        df = st.session_state.local_data["news_articles"]
+        
+        # Filter by topic if available
+        if 'topic' in df.columns:
+            df = df[df['topic'] == topic_id]
+        else:
+            # If no topic column, just return some random articles
+            import random
+            return [row.to_dict() for i, row in df.sample(min(limit, len(df))).iterrows()]
+        
+        return [row.to_dict() for i, row in df.head(limit).iterrows()]
+    
+    def get_knowledge_graph(self) -> Dict[str, Any]:
+        """Get knowledge graph data"""
+        if hasattr(st.session_state, "use_local_data") and st.session_state.use_local_data:
+            # Use local data
+            return self._get_local_knowledge_graph()
+        
+        # Try API first
+        try:
+            url = f"{self.base_url}/api/graph/data"
+            
+            response = requests.get(url, timeout=10)
+            data = self._handle_response(response)
+            return data
+        except Exception as e:
+            self.logger.error(f"Error getting knowledge graph: {e}")
+            # Fallback to local data
+            return self._get_local_knowledge_graph()
+    
+    def _get_local_knowledge_graph(self) -> Dict[str, Any]:
+        """Get knowledge graph from local data"""
+        if not hasattr(st.session_state, "local_data") or st.session_state.local_data["knowledge_graph"] is None:
+            return {"nodes": [], "links": []}
+        
+        return st.session_state.local_data["knowledge_graph"]
+    
+    def get_graph_stats(self) -> Dict[str, Any]:
+        """Get statistics about the knowledge graph"""
+        if hasattr(st.session_state, "use_local_data") and st.session_state.use_local_data:
+            # Use local data
+            return self._get_local_graph_stats()
+        
+        # Try API first
+        try:
+            url = f"{self.base_url}/api/graph/stats"
+            
+            response = requests.get(url, timeout=10)
+            data = self._handle_response(response)
+            return data
+        except Exception as e:
+            self.logger.error(f"Error getting graph stats: {e}")
+            # Fallback to local data
+            return self._get_local_graph_stats()
+    
+    def _get_local_graph_stats(self) -> Dict[str, Any]:
+        """Get knowledge graph stats from local data"""
+        if not hasattr(st.session_state, "local_data") or st.session_state.local_data["knowledge_graph"] is None:
+            return {"total_entities": 0, "total_connections": 0}
+        
+        graph = st.session_state.local_data["knowledge_graph"]
+        
+        return {
+            "total_entities": len(graph.get("nodes", [])),
+            "total_connections": len(graph.get("links", []))
+        }
+    
+    def get_top_entities(self, limit: int = 20) -> List[Dict[str, Any]]:
+        """Get top entities by mention count"""
+        if hasattr(st.session_state, "use_local_data") and st.session_state.use_local_data:
+            # Use local data
+            return self._get_local_top_entities(limit)
+        
+        # Try API first
+        try:
+            url = f"{self.base_url}/api/graph/entities"
+            params = {"limit": limit}
+            
+            response = requests.get(url, params=params, timeout=10)
+            data = self._handle_response(response)
+            return data.get("entities", [])
+        except Exception as e:
+            self.logger.error(f"Error getting top entities: {e}")
+            # Fallback to local data
+            return self._get_local_top_entities(limit)
+    
+    def _get_local_top_entities(self, limit: int = 20) -> List[Dict[str, Any]]:
+        """Get top entities from local data"""
+        if not hasattr(st.session_state, "local_data") or st.session_state.local_data["knowledge_graph"] is None:
+            return []
+        
+        graph = st.session_state.local_data["knowledge_graph"]
+        
+        # Sort nodes by count
+        nodes = sorted(
+            graph.get("nodes", []),
+            key=lambda x: x.get("count", 0),
+            reverse=True
+        )
+        
+        return nodes[:limit]
+    
+    def get_entity_connections(self, entity: str) -> Dict[str, Any]:
+        """Get connections for a specific entity"""
+        if hasattr(st.session_state, "use_local_data") and st.session_state.use_local_data:
+            # Use local data
+            return self._get_local_entity_connections(entity)
+        
+        # Try API first
+        try:
+            url = f"{self.base_url}/api/graph/entity/{entity}"
+            
+            response = requests.get(url, timeout=10)
+            data = self._handle_response(response)
+            return data
+        except Exception as e:
+            self.logger.error(f"Error getting entity connections: {e}")
+            # Fallback to local data
+            return self._get_local_entity_connections(entity)
+    
+    def _get_local_entity_connections(self, entity: str) -> Dict[str, Any]:
+        """Get entity connections from local data"""
+        if not hasattr(st.session_state, "local_data") or st.session_state.local_data["knowledge_graph"] is None:
+            return {"id": entity, "count": 0, "connections": []}
+        
+        graph = st.session_state.local_data["knowledge_graph"]
+        
+        # Find the entity node
+        node = next((n for n in graph.get("nodes", []) if n.get("id") == entity), None)
+        
+        if not node:
+            return {"id": entity, "count": 0, "connections": []}
+        
+        # Find all links with this entity
+        connections = []
+        for link in graph.get("links", []):
+            if link.get("source") == entity:
+                target = link.get("target")
+                strength = link.get("value", 1)
+                connections.append({"entity": target, "strength": strength})
+            elif link.get("target") == entity:
+                source = link.get("source")
+                strength = link.get("value", 1)
+                connections.append({"entity": source, "strength": strength})
+        
+        # Sort by strength
+        connections.sort(key=lambda x: x["strength"], reverse=True)
+        
+        return {
+            "id": entity,
+            "count": node.get("count", 0),
+            "connections": connections
+        }
