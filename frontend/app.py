@@ -14,7 +14,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Constants
-DEFAULT_API_URL = "https://news-analytics.fly.dev"
+DEFAULT_API_URL = "https://news-analytics-production.up.railway.app"
 
 def load_local_data():
     """Load data from local files in the data directory when API is unavailable"""
