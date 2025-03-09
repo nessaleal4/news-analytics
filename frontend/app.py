@@ -76,7 +76,10 @@ if "api_client" not in st.session_state:
     
     # Load local data for fallback
     st.session_state.local_data = load_local_data()
-    st.session_state.use_local_data = False  # Start with API if available
+    
+    # Initialize use_local_data in session state
+    if "use_local_data" not in st.session_state:
+        st.session_state.use_local_data = False
 
 # Page configuration
 st.set_page_config(
@@ -116,6 +119,10 @@ def main():
                 st.success(f"API URL updated to {api_url}")
             
             # Option to toggle between API and local data
+            # Make sure use_local_data exists in session state
+            if "use_local_data" not in st.session_state:
+                st.session_state.use_local_data = False
+                
             use_local = st.checkbox("Use local data", value=st.session_state.use_local_data)
             if use_local != st.session_state.use_local_data:
                 st.session_state.use_local_data = use_local
