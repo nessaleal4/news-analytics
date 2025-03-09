@@ -6,8 +6,43 @@ import json
 from datetime import datetime
 import time
 import logging
-
 from frontend.utils.api import APIClient
+import pandas as pd
+import numpy as np
+from sentence_transformers import SentenceTransformer
+
+def generate_embeddings(csv_path, output_path):
+    """
+    Generate embeddings for news articles
+    
+    :param csv_path: Path to the news articles CSV
+    :param output_path: Path to save the embeddings .npy file
+    """
+    # Load the articles
+    df = pd.read_csv(csv_path)
+    
+    # Initialize embedding model
+    model = SentenceTransformer('all-MiniLM-L6-v2')
+    
+    # Prepare texts for embedding
+    # Combine title and description, or use title if description is not available
+    texts = df['title'].fillna('') + ' ' + df['description'].fillna('')
+    
+    # Generate embeddings
+    embeddings = model.encode(texts.tolist(), show_progress_bar=True)
+    
+    # Save embeddings
+    np.save(output_path, embeddings)
+    
+    print(f"Generated {len(embeddings)} embeddings")
+    print(f"Embeddings shape: {embeddings.shape}")
+
+# Example usage
+if __name__ == '__main__':  # Corrected from **name**
+    generate_embeddings(
+        'frontend/data/news_articles.csv', 
+        'frontend/data/embeddings.npy'
+    )
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
