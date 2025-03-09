@@ -1,10 +1,15 @@
 import requests
 import json
+import os
 from typing import Dict, List, Any, Optional
 import logging
 import streamlit as st
 import pandas as pd
 import re
+import numpy as np
+
+# Import for cosine similarity calculation
+from scipy.spatial.distance import cosine
 
 logger = logging.getLogger(__name__)
 
@@ -15,7 +20,51 @@ class APIClient:
         """Initialize API client with base URL"""
         self.base_url = base_url.rstrip('/')
         self.logger = logging.getLogger(__name__)
+        self.embeddings = None
         self.logger.info(f"API Client initialized with URL: {self.base_url}")
+        self._load_local_embeddings()
+    
+    def _load_local_embeddings(self):
+        """Load local embeddings from embeddings.npy"""
+        try:
+            embeddings_path = os.path.join(os.path.dirname(__file__), '..', 'data', 'embeddings.npy')
+            if os.path.exists(embeddings_path):
+                self.embeddings = np.load(embeddings_path)
+                self.logger.info(f"Loaded {len(self.embeddings)} local embeddings")
+            else:
+                self.logger.warning("Embeddings file not found")
+        except Exception as e:
+            self.logger.error(f"Error loading embeddings: {e}")
+    
+    def _semantic_local_search(self, query_embedding, limit: int = 10) -> List[Dict[str, Any]]:
+        """Perform semantic search using local embeddings"""
+        if not hasattr(st.session_state, "local_data") or not self.embeddings:
+            return []
+        
+        df = st.session_state.local_data["news_articles"]
+        
+        # Calculate cosine similarities
+        similarities = []
+        for i, doc_embedding in enumerate(self.embeddings):
+            try:
+                # Use 1 - cosine distance to get similarity score
+                sim = 1 - cosine(query_embedding, doc_embedding)
+                similarities.append((i, sim))
+            except Exception as e:
+                self.logger.error(f"Error calculating similarity for doc {i}: {e}")
+        
+        # Sort by similarity and get top results
+        similarities.sort(key=lambda x: x[1], reverse=True)
+        
+        results = []
+        for idx, score in similarities[:limit]:
+            row = df.iloc[idx]
+            results.append({
+                "score": float(score),
+                "payload": row.to_dict()
+            })
+        
+        return results
     
     def _handle_response(self, response: requests.Response) -> Dict[str, Any]:
         """Handle API response and errors"""
@@ -32,25 +81,6 @@ class APIClient:
         except json.JSONDecodeError:
             self.logger.error(f"Error decoding API response: {response.text}")
             raise ValueError("Invalid response from API")
-    
-    def semantic_search(self, query: str, limit: int = 10) -> List[Dict[str, Any]]:
-        """Search for articles semantically"""
-        if hasattr(st.session_state, "use_local_data") and st.session_state.use_local_data:
-            # Use local data
-            return self._local_search(query, limit)
-        
-        # Try API first
-        try:
-            url = f"{self.base_url}/api/search/semantic"
-            payload = {"query": query, "limit": limit}
-            
-            response = requests.post(url, json=payload, timeout=10)
-            data = self._handle_response(response)
-            return data.get("results", [])
-        except Exception as e:
-            self.logger.error(f"Error in semantic search: {e}")
-            # Fallback to local search
-            return self._local_search(query, limit)
     
     def _local_search(self, query: str, limit: int = 10) -> List[Dict[str, Any]]:
         """Search in local data when API is unavailable"""
@@ -96,6 +126,34 @@ class APIClient:
         # Sort by score and limit results
         results.sort(key=lambda x: x["score"], reverse=True)
         return results[:limit]
+    
+    def semantic_search(self, query: str, limit: int = 10) -> List[Dict[str, Any]]:
+        """Search for articles semantically"""
+        if hasattr(st.session_state, "use_local_data") and st.session_state.use_local_data:
+            # Attempt to load embedding for query 
+            try:
+                from sentence_transformers import SentenceTransformer
+                model = SentenceTransformer('all-MiniLM-L6-v2')
+                query_embedding = model.encode(query)
+                
+                # Use local embeddings search
+                return self._semantic_local_search(query_embedding, limit)
+            except ImportError:
+                # Fallback to keyword search if embedding fails
+                return self._local_search(query, limit)
+        
+        # Existing API call logic remains the same
+        try:
+            url = f"{self.base_url}/api/search/semantic"
+            payload = {"query": query, "limit": limit}
+            
+            response = requests.post(url, json=payload, timeout=10)
+            data = self._handle_response(response)
+            return data.get("results", [])
+        except Exception as e:
+            self.logger.error(f"Error in semantic search: {e}")
+            # Fallback to local search
+            return self._local_search(query, limit)
     
     def keyword_search(self, query: str, limit: int = 10) -> List[Dict[str, Any]]:
         """Search for articles by keyword"""
@@ -320,7 +378,7 @@ class APIClient:
             url = f"{self.base_url}/api/topics/list"
             
             response = requests.get(url, timeout=10)
-            data = self._handle_response(response)
+data = self._handle_response(response)
             return data.get("topics", [])
         except Exception as e:
             self.logger.error(f"Error getting topics: {e}")
