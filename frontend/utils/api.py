@@ -198,9 +198,14 @@ class APIClient:
             return []
         
         df = st.session_state.local_data["news_articles"]
-
-```python
-                    topic_info:
+        
+        def process_topic_info(topic_info, topic_keywords):
+            """Process topic info into a standardized format"""
+            topics = []
+            try:
+                # Handle list format (older format)
+                if isinstance(topic_info, list):
+                    for topic in topic_info:
                         topic_id = topic.get("Topic", -1)
                         topic_id_str = str(topic_id)
                         
@@ -216,35 +221,35 @@ class APIClient:
                             "keywords": keywords,
                             "name": topic.get("Name", f"Topic {topic_id}")
                         })
-            else:
-                # Dictionary format processing
-                for topic_id, info in topic_info.items():
-                    topic_id_int = int(topic_id)
-                    
-                    # Get keywords for this topic if available
-                    keywords = []
-                    if topic_keywords and str(topic_id_int) in topic_keywords:
-                        for item in topic_keywords[str(topic_id_int)]:
-                            if isinstance(item, dict):
-                                # Handle the case where items are already dictionaries
-                                keywords.append({"word": item["word"], "score": item["score"]})
-                            else:
-                                # Handle the case where items are [word, score] pairs
-                                word, score = item
-                                keywords.append({"word": word, "score": score})
-                    
-                    topics.append({
-                        "id": topic_id_int,
-                        "count": info.get("count", 0) if isinstance(info, dict) else info,
-                        "keywords": keywords
-                    })
-        except Exception as e:
-            self.logger.error(f"Error processing topic data: {e}")
-            st.error(f"Error processing topic data: {e}")
-            return []
+                else:
+                    # Dictionary format processing
+                    for topic_id, info in topic_info.items():
+                        topic_id_int = int(topic_id)
+                        
+                        # Get keywords for this topic if available
+                        keywords = []
+                        if topic_keywords and str(topic_id_int) in topic_keywords:
+                            for item in topic_keywords[str(topic_id_int)]:
+                                if isinstance(item, dict):
+                                    # Handle the case where items are already dictionaries
+                                    keywords.append({"word": item["word"], "score": item["score"]})
+                                else:
+                                    # Handle the case where items are [word, score] pairs
+                                    word, score = item
+                                    keywords.append({"word": word, "score": score})
+                        
+                        topics.append({
+                            "id": topic_id_int,
+                            "count": info.get("count", 0) if isinstance(info, dict) else info,
+                            "keywords": keywords
+                        })
+            except Exception as e:
+                self.logger.error(f"Error processing topic data: {e}")
+                st.error(f"Error processing topic data: {e}")
+                return []
+            
+            return topics
         
-        return topics
-    
     def get_topic_articles(self, topic_id: int, limit: int = 10) -> List[Dict[str, Any]]:
         """Get articles for a specific topic"""
         if hasattr(st.session_state, "use_local_data") and st.session_state.use_local_data:
@@ -378,8 +383,6 @@ class APIClient:
             return []
         
         graph = st.session_state.local_data["knowledge_graph"]
-
-graph"]
         
         # Sort nodes by count
         nodes = sorted(
@@ -441,4 +444,3 @@ graph"]
             "count": node.get("count", 0),
             "connections": connections
         }
-```
