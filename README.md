@@ -1,6 +1,6 @@
-UI access: https://news-analytics-vanessa-nlp.streamlit.app/
 
-# News Analytics
+
+# News Analytics: UI access: https://news-analytics-vanessa-nlp.streamlit.app/
 
 A comprehensive platform for analyzing news articles using NLP techniques, featuring topic modeling, semantic search, and knowledge graph visualization.
 
