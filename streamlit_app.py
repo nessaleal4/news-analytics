@@ -1,14 +1,13 @@
 """
 Main entry point for Streamlit Cloud deployment
 """
-# Import the main app from the frontend directory
 import sys
 import os
 
-# Add the frontend directory to the path
-sys.path.append(os.path.join(os.path.dirname(__file__), "frontend"))
+# Add the repository root to the path so Python can find the frontend module
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-# Import and run the main app
+# Now import from frontend.app
 from frontend.app import main
 
 # Run the app
