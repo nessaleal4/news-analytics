@@ -22,34 +22,69 @@ class APIClient:
         self.logger = logging.getLogger(__name__)
         self.embeddings = None
         self.logger.info(f"API Client initialized with URL: {self.base_url}")
+        
+        # Try to load embeddings right away
         self._load_local_embeddings()
+        
+        # Test API connection
+        try:
+            self._test_api_connection()
+        except Exception as e:
+            self.logger.warning(f"API connection failed: {e}")
+            # Set use_local_data to True if in Streamlit context
+            if hasattr(st, 'session_state'):
+                st.session_state.use_local_data = True
+    
+    def _test_api_connection(self):
+        """Test connection to the API"""
+        try:
+            # Try a simple endpoint to check connection
+            url = f"{self.base_url}/api/categories"  # Use an existing endpoint
+            response = requests.get(url, timeout=3)  # Short timeout for quick check
+            response.raise_for_status()
+            return True
+        except Exception as e:
+            self.logger.warning(f"API connection test failed: {e}")
+            return False
     
     def _load_local_embeddings(self):
         """Load local embeddings from embeddings.npy"""
         try:
-            embeddings_path = os.path.join(os.path.dirname(__file__), '..', 'data', 'embeddings.npy')
-            if os.path.exists(embeddings_path):
-                self.embeddings = np.load(embeddings_path)
-                self.logger.info(f"Loaded {len(self.embeddings)} local embeddings")
-            else:
-                self.logger.warning("Embeddings file not found")
+            # Try multiple possible paths for embeddings file
+            possible_paths = [
+                os.path.join(os.path.dirname(__file__), '..', 'data', 'embeddings.npy'),
+                os.path.join('frontend', 'data', 'embeddings.npy'),
+                os.path.join('data', 'embeddings.npy'),
+                os.path.join('.', 'embeddings.npy')
+            ]
+            
+            for path in possible_paths:
+                if os.path.exists(path):
+                    self.embeddings = np.load(path)
+                    self.logger.info(f"Loaded {len(self.embeddings)} local embeddings from {path}")
+                    return
+            
+            self.logger.warning("Embeddings file not found in any of the expected locations")
         except Exception as e:
             self.logger.error(f"Error loading embeddings: {e}")
     
     def _semantic_local_search(self, query_embedding, limit: int = 10) -> List[Dict[str, Any]]:
         """Perform semantic search using local embeddings"""
-        if not hasattr(st.session_state, "local_data") or not self.embeddings:
+        if not hasattr(st.session_state, "local_data") or self.embeddings is None:
             return []
         
-        df = st.session_state.local_data["news_articles"]
+        df = st.session_state.local_data.get("news_articles")
+        if df is None:
+            return []
         
         # Calculate cosine similarities
         similarities = []
         for i, doc_embedding in enumerate(self.embeddings):
             try:
-                # Use 1 - cosine distance to get similarity score
-                sim = 1 - cosine(query_embedding, doc_embedding)
-                similarities.append((i, sim))
+                if i < len(df):  # Make sure we don't go beyond dataframe size
+                    # Use 1 - cosine distance to get similarity score
+                    sim = 1 - cosine(query_embedding, doc_embedding)
+                    similarities.append((i, sim))
             except Exception as e:
                 self.logger.error(f"Error calculating similarity for doc {i}: {e}")
         
@@ -58,11 +93,12 @@ class APIClient:
         
         results = []
         for idx, score in similarities[:limit]:
-            row = df.iloc[idx]
-            results.append({
-                "score": float(score),
-                "payload": row.to_dict()
-            })
+            if idx < len(df):  # Safety check
+                row = df.iloc[idx]
+                results.append({
+                    "score": float(score),
+                    "payload": row.to_dict()
+                })
         
         return results
     
@@ -84,7 +120,7 @@ class APIClient:
     
     def _local_search(self, query: str, limit: int = 10) -> List[Dict[str, Any]]:
         """Search in local data when API is unavailable"""
-        if not hasattr(st.session_state, "local_data") or st.session_state.local_data["news_articles"] is None:
+        if not hasattr(st.session_state, "local_data") or st.session_state.local_data.get("news_articles") is None:
             return []
         
         df = st.session_state.local_data["news_articles"]
@@ -137,12 +173,18 @@ class APIClient:
                 query_embedding = model.encode(query)
                 
                 # Use local embeddings search
-                return self._semantic_local_search(query_embedding, limit)
-            except ImportError:
-                # Fallback to keyword search if embedding fails
+                local_results = self._semantic_local_search(query_embedding, limit)
+                if local_results:
+                    return local_results
+                
+                # Fallback to keyword search if semantic search returns no results
+                return self._local_search(query, limit)
+            except Exception as e:
+                self.logger.error(f"Error in local semantic search: {e}")
+                # Fallback to keyword search
                 return self._local_search(query, limit)
         
-        # Existing API call logic remains the same
+        # Try API first
         try:
             url = f"{self.base_url}/api/search/semantic"
             payload = {"query": query, "limit": limit}
@@ -152,7 +194,23 @@ class APIClient:
             return data.get("results", [])
         except Exception as e:
             self.logger.error(f"Error in semantic search: {e}")
+            # Set use_local_data to True for future requests in Streamlit context
+            if hasattr(st, 'session_state'):
+                st.session_state.use_local_data = True
+            
             # Fallback to local search
+            try:
+                from sentence_transformers import SentenceTransformer
+                model = SentenceTransformer('all-MiniLM-L6-v2')
+                query_embedding = model.encode(query)
+                
+                local_results = self._semantic_local_search(query_embedding, limit)
+                if local_results:
+                    return local_results
+            except Exception:
+                pass
+            
+            # Final fallback to keyword search
             return self._local_search(query, limit)
     
     def keyword_search(self, query: str, limit: int = 10) -> List[Dict[str, Any]]:
@@ -171,6 +229,10 @@ class APIClient:
             return data.get("results", [])
         except Exception as e:
             self.logger.error(f"Error in keyword search: {e}")
+            # Set use_local_data to True for future requests in Streamlit context
+            if hasattr(st, 'session_state'):
+                st.session_state.use_local_data = True
+            
             # Fallback to local search
             return self._local_search(query, limit)
     
@@ -189,12 +251,16 @@ class APIClient:
             return data.get("results", [])
         except Exception as e:
             self.logger.error(f"Error getting recent articles: {e}")
+            # Set use_local_data to True for future requests in Streamlit context
+            if hasattr(st, 'session_state'):
+                st.session_state.use_local_data = True
+            
             # Fallback to local data
             return self._get_local_recent_articles(limit)
     
     def _get_local_recent_articles(self, limit: int = 10) -> List[Dict[str, Any]]:
         """Get recent articles from local data"""
-        if not hasattr(st.session_state, "local_data") or st.session_state.local_data["news_articles"] is None:
+        if not hasattr(st.session_state, "local_data") or st.session_state.local_data.get("news_articles") is None:
             return []
         
         df = st.session_state.local_data["news_articles"]
@@ -203,60 +269,160 @@ class APIClient:
         if 'date' in df.columns:
             df = df.sort_values('date', ascending=False)
         
-        # Convert rows to dictionaries
-        return [row.to_dict() for i, row in df.head(limit).iterrows()]
+        # Convert top rows to format expected by frontend
+        results = []
+        for i, row in df.head(limit).iterrows():
+            results.append({
+                "score": 1.0,  # Placeholder score
+                "payload": row.to_dict()
+            })
+        
+        return results
+    
+    def get_topics(self) -> List[Dict[str, Any]]:
+        """Get all topics"""
+        if hasattr(st.session_state, "use_local_data") and st.session_state.use_local_data:
+            # Use local data
+            return self._get_local_topics()
+        
+        # Try API first
+        try:
+            url = f"{self.base_url}/api/topics"
+            
+            response = requests.get(url, timeout=10)
+            data = self._handle_response(response)
+            return data.get("topics", [])
+        except Exception as e:
+            self.logger.error(f"Error getting topics: {e}")
+            # Set use_local_data to True for future requests in Streamlit context
+            if hasattr(st, 'session_state'):
+                st.session_state.use_local_data = True
+            
+            # Fallback to local data
+            return self._get_local_topics()
+    
+    def _get_local_topics(self) -> List[Dict[str, Any]]:
+        """Get topics from local data"""
+        if not hasattr(st.session_state, "local_data"):
+            return []
+        
+        topic_info = st.session_state.local_data.get("topic_info")
+        topic_keywords = st.session_state.local_data.get("topic_keywords")
+        
+        if not topic_info:
+            return []
+        
+        return self.process_topic_info(topic_info, topic_keywords)
     
     def process_topic_info(self, topic_info, topic_keywords):
-            """Process topic info into a standardized format"""
-            topics = []
-            try:
-                # Handle list format (older format)
-                if isinstance(topic_info, list):
-                    for topic in topic_info:
-                        topic_id = topic.get("Topic", -1)
-                        topic_id_str = str(topic_id)
+        """Process topic info into a standardized format"""
+        topics = []
+        try:
+            # Handle list format
+            if isinstance(topic_info, list):
+                for topic in topic_info:
+                    topic_id = topic.get("Topic", -1)
+                    if topic_id == -1:  # Skip outlier topic
+                        continue
                         
-                        # Get keywords for this topic if available
-                        keywords = []
-                        if topic_id_str in topic_keywords:
-                            for item in topic_keywords[topic_id_str]:
-                                keywords.append({"word": item["word"], "score": item["score"]})
+                    topic_id_str = str(topic_id)
+                    
+                    # Get keywords for this topic if available
+                    keywords = []
+                    if topic_keywords and topic_id_str in topic_keywords:
+                        for item in topic_keywords[topic_id_str]:
+                            if isinstance(item, dict):
+                                keywords.append({"word": item.get("word", ""), "score": item.get("score", 0)})
+                            elif isinstance(item, (list, tuple)) and len(item) >= 2:
+                                keywords.append({"word": item[0], "score": item[1]})
+                    
+                    topics.append({
+                        "id": topic_id,
+                        "count": topic.get("Count", 0),
+                        "keywords": keywords,
+                        "name": topic.get("Name", f"Topic {topic_id}")
+                    })
+            elif isinstance(topic_info, dict):
+                # Dictionary format processing
+                for topic_id, info in topic_info.items():
+                    if topic_id == "-1":  # Skip outlier topic
+                        continue
                         
-                        topics.append({
-                            "id": topic_id,
-                            "count": topic.get("Count", 0),
-                            "keywords": keywords,
-                            "name": topic.get("Name", f"Topic {topic_id}")
-                        })
-                else:
-                    # Dictionary format processing
-                    for topic_id, info in topic_info.items():
+                    try:
                         topic_id_int = int(topic_id)
-                        
-                        # Get keywords for this topic if available
-                        keywords = []
-                        if topic_keywords and str(topic_id_int) in topic_keywords:
-                            for item in topic_keywords[str(topic_id_int)]:
-                                if isinstance(item, dict):
-                                    # Handle the case where items are already dictionaries
-                                    keywords.append({"word": item["word"], "score": item["score"]})
-                                else:
-                                    # Handle the case where items are [word, score] pairs
-                                    word, score = item
-                                    keywords.append({"word": word, "score": score})
-                        
-                        topics.append({
-                            "id": topic_id_int,
-                            "count": info.get("count", 0) if isinstance(info, dict) else info,
-                            "keywords": keywords
-                        })
-            except Exception as e:
-                self.logger.error(f"Error processing topic data: {e}")
-                st.error(f"Error processing topic data: {e}")
-                return []
-            
-            return topics
+                    except ValueError:
+                        continue  # Skip if topic_id is not a valid integer
+                    
+                    # Get keywords for this topic if available
+                    keywords = []
+                    if topic_keywords and topic_id in topic_keywords:
+                        for item in topic_keywords[topic_id]:
+                            if isinstance(item, dict):
+                                keywords.append({"word": item.get("word", ""), "score": item.get("score", 0)})
+                            elif isinstance(item, (list, tuple)) and len(item) >= 2:
+                                keywords.append({"word": item[0], "score": item[1]})
+                    
+                    count = 0
+                    if isinstance(info, dict):
+                        count = info.get("count", 0)
+                    elif isinstance(info, (int, float)):
+                        count = info
+                    
+                    topics.append({
+                        "id": topic_id_int,
+                        "count": count,
+                        "keywords": keywords,
+                        "name": f"Topic {topic_id}"
+                    })
+        except Exception as e:
+            self.logger.error(f"Error processing topic data: {e}")
+            return []
         
+        return topics
+    
+    def get_topic_summary(self) -> Dict[str, Any]:
+        """Get summary of all topics"""
+        if hasattr(st.session_state, "use_local_data") and st.session_state.use_local_data:
+            # Use local data
+            return self._get_local_topic_summary()
+        
+        # Try API first
+        try:
+            url = f"{self.base_url}/api/topics/summary"
+            
+            response = requests.get(url, timeout=10)
+            data = self._handle_response(response)
+            return data
+        except Exception as e:
+            self.logger.error(f"Error getting topic summary: {e}")
+            # Fallback to local data
+            if hasattr(st, 'session_state'):
+                st.session_state.use_local_data = True
+            return self._get_local_topic_summary()
+    
+    def _get_local_topic_summary(self) -> Dict[str, Any]:
+        """Get topic summary from local data"""
+        if not hasattr(st.session_state, "local_data"):
+            return {"total_articles": 0, "total_topics": 0}
+        
+        articles = st.session_state.local_data.get("news_articles")
+        topic_info = st.session_state.local_data.get("topic_info")
+        
+        total_articles = len(articles) if articles is not None else 0
+        total_topics = 0
+        
+        if isinstance(topic_info, list):
+            # Count topics excluding outlier (-1)
+            total_topics = sum(1 for t in topic_info if t.get("Topic", -1) != -1)
+        elif isinstance(topic_info, dict):
+            # Count topics excluding outlier (-1)
+            total_topics = sum(1 for k in topic_info.keys() if k != "-1")
+        
+        return {
+            "total_articles": total_articles,
+            "total_topics": total_topics
+        }
+    
     def get_topic_articles(self, topic_id: int, limit: int = 10) -> List[Dict[str, Any]]:
         """Get articles for a specific topic"""
         if hasattr(st.session_state, "use_local_data") and st.session_state.use_local_data:
@@ -274,6 +440,8 @@ class APIClient:
         except Exception as e:
             self.logger.error(f"Error getting topic articles: {e}")
             # Fallback to local data
+            if hasattr(st, 'session_state'):
+                st.session_state.use_local_data = True
             return self._get_local_topic_articles(topic_id, limit)
     
     def _get_local_topic_articles(self, topic_id: int, limit: int = 10) -> List[Dict[str, Any]]:
@@ -309,6 +477,8 @@ class APIClient:
         except Exception as e:
             self.logger.error(f"Error getting knowledge graph: {e}")
             # Fallback to local data
+            if hasattr(st, 'session_state'):
+                st.session_state.use_local_data = True
             return self._get_local_knowledge_graph()
     
     def _get_local_knowledge_graph(self) -> Dict[str, Any]:
@@ -351,6 +521,8 @@ class APIClient:
         except Exception as e:
             self.logger.error(f"Error getting graph stats: {e}")
             # Fallback to local data
+            if hasattr(st, 'session_state'):
+                st.session_state.use_local_data = True
             return self._get_local_graph_stats()
     
     def _get_local_graph_stats(self) -> Dict[str, Any]:
@@ -365,8 +537,8 @@ class APIClient:
             "total_connections": len(graph.get("links", []))
         }
     
-    def get_categories(self) -> List[str]:
-        """Get available news categories"""
+    def get_categories(self) -> Dict[str, List[str]]:
+        """Get available news categories and sources"""
         if hasattr(st.session_state, "use_local_data") and st.session_state.use_local_data:
             # Use local data
             return self._get_local_categories()
@@ -377,135 +549,41 @@ class APIClient:
             
             response = requests.get(url, timeout=10)
             data = self._handle_response(response)
-            return data.get("categories", [])
+            return data
         except Exception as e:
             self.logger.error(f"Error getting categories: {e}")
             # Fallback to local data
+            if hasattr(st, 'session_state'):
+                st.session_state.use_local_data = True
             return self._get_local_categories()
     
-    def _get_local_categories(self) -> List[str]:
-        """Get categories from local data"""
+    def _get_local_categories(self) -> Dict[str, List[str]]:
+        """Get categories and sources from local data"""
         if not hasattr(st.session_state, "local_data") or st.session_state.local_data["news_articles"] is None:
-            return []
+            return {"categories": [], "sources": []}
         
         df = st.session_state.local_data["news_articles"]
+        categories = []
+        sources = []
         
-        # Return unique categories if category column exists
+        # Extract categories if category column exists
         if 'category' in df.columns:
-            return sorted(df['category'].unique().tolist())
+            categories = sorted(df['category'].dropna().unique().tolist())
         
-        # Default categories if not available
-        return ["Politics", "Business", "Technology", "Science", "Health"]
-    
-    def get_sources(self) -> List[str]:
-        """Get available news sources"""
-        if hasattr(st.session_state, "use_local_data") and st.session_state.use_local_data:
-            # Use local data
-            return self._get_local_sources()
-        
-        # Try API first
-        try:
-            url = f"{self.base_url}/api/sources"
-            
-            response = requests.get(url, timeout=10)
-            data = self._handle_response(response)
-            return data.get("sources", [])
-        except Exception as e:
-            self.logger.error(f"Error getting sources: {e}")
-            # Fallback to local data
-            return self._get_local_sources()
-    
-    def _get_local_sources(self) -> List[str]:
-        """Get sources from local data"""
-        if not hasattr(st.session_state, "local_data") or st.session_state.local_data["news_articles"] is None:
-            return []
-        
-        df = st.session_state.local_data["news_articles"]
-        
-        # Return unique sources if source column exists
+        # Extract sources if source column exists
         if 'source' in df.columns:
-            return sorted(df['source'].unique().tolist())
+            sources = sorted(df['source'].dropna().unique().tolist())
         
-        # Default sources if not available
-        return ["Associated Press", "Reuters", "BBC", "CNN", "Fox News"]
-    
-    def get_topic_summary(self, topic_id: int) -> Dict[str, Any]:
-        """Get summary information for a specific topic"""
-        if hasattr(st.session_state, "use_local_data") and st.session_state.use_local_data:
-            # Use local data
-            return self._get_local_topic_summary(topic_id)
+        # Default values if not available
+        if not categories:
+            categories = ["Politics", "Business", "Technology", "Science", "Health"]
+        if not sources:
+            sources = ["Associated Press", "Reuters", "BBC", "CNN", "Fox News"]
         
-        # Try API first
-        try:
-            url = f"{self.base_url}/api/topics/{topic_id}/summary"
-            
-            response = requests.get(url, timeout=10)
-            data = self._handle_response(response)
-            return data
-        except Exception as e:
-            self.logger.error(f"Error getting topic summary: {e}")
-            # Fallback to local data
-            return self._get_local_topic_summary(topic_id)
-    
-    def _get_local_topic_summary(self, topic_id: int) -> Dict[str, Any]:
-        """Get topic summary from local data"""
-        if not hasattr(st.session_state, "local_data"):
-            return {"id": topic_id, "name": f"Topic {topic_id}", "count": 0, "keywords": [], "description": ""}
-        
-        # Try to get topic info
-        if "topic_info" in st.session_state.local_data:
-            topic_info = st.session_state.local_data["topic_info"]
-            
-            # Handle different formats of topic info
-            topic_data = None
-            if isinstance(topic_info, list):
-                # List format
-                topic_data = next((t for t in topic_info if t.get("Topic") == topic_id), None)
-                if topic_data:
-                    # Get keywords for this topic if available
-                    keywords = []
-                    if "topic_keywords" in st.session_state.local_data:
-                        topic_keywords = st.session_state.local_data["topic_keywords"]
-                        if str(topic_id) in topic_keywords:
-                            keywords = [item["word"] for item in topic_keywords[str(topic_id)]]
-                    
-                    return {
-                        "id": topic_id,
-                        "name": topic_data.get("Name", f"Topic {topic_id}"),
-                        "count": topic_data.get("Count", 0),
-                        "keywords": keywords,
-                        "description": self._generate_topic_description(keywords)
-                    }
-            elif isinstance(topic_info, dict) and str(topic_id) in topic_info:
-                # Dictionary format
-                topic_data = topic_info[str(topic_id)]
-                
-                # Get keywords for this topic if available
-                keywords = []
-                if "topic_keywords" in st.session_state.local_data:
-                    topic_keywords = st.session_state.local_data["topic_keywords"]
-                    if str(topic_id) in topic_keywords:
-                        keywords = [item["word"] for item in topic_keywords[str(topic_id)]]
-                
-                return {
-                    "id": topic_id,
-                    "name": topic_data.get("name", f"Topic {topic_id}"),
-                    "count": topic_data.get("count", 0),
-                    "keywords": keywords,
-                    "description": self._generate_topic_description(keywords)
-                }
-        
-        # Default response if topic not found
-        return {"id": topic_id, "name": f"Topic {topic_id}", "count": 0, "keywords": [], "description": ""}
-    
-    def _generate_topic_description(self, keywords: List[str]) -> str:
-        """Generate a simple description for a topic based on keywords"""
-        if not keywords:
-            return "No description available for this topic."
-        
-        # Use top 5 keywords for the description
-        top_keywords = keywords[:5]
-        return f"This topic covers news related to {', '.join(top_keywords)}."
+        return {
+            "categories": categories,
+            "sources": sources
+        }
     
     def get_top_entities(self, limit: int = 20) -> List[Dict[str, Any]]:
         """Get top entities by mention count"""
@@ -524,6 +602,8 @@ class APIClient:
         except Exception as e:
             self.logger.error(f"Error getting top entities: {e}")
             # Fallback to local data
+            if hasattr(st, 'session_state'):
+                st.session_state.use_local_data = True
             return self._get_local_top_entities(limit)
     
     def _get_local_top_entities(self, limit: int = 20) -> List[Dict[str, Any]]:
@@ -558,6 +638,8 @@ class APIClient:
         except Exception as e:
             self.logger.error(f"Error getting entity connections: {e}")
             # Fallback to local data
+            if hasattr(st, 'session_state'):
+                st.session_state.use_local_data = True
             return self._get_local_entity_connections(entity)
     
     def _get_local_entity_connections(self, entity: str) -> Dict[str, Any]:
@@ -566,30 +648,3 @@ class APIClient:
             return {"id": entity, "count": 0, "connections": []}
         
         graph = st.session_state.local_data["knowledge_graph"]
-        
-        # Find the entity node
-        node = next((n for n in graph.get("nodes", []) if n.get("id") == entity), None)
-        
-        if not node:
-            return {"id": entity, "count": 0, "connections": []}
-        
-        # Find all links with this entity
-        connections = []
-        for link in graph.get("links", []):
-            if link.get("source") == entity:
-                target = link.get("target")
-                strength = link.get("value", 1)
-                connections.append({"entity": target, "strength": strength})
-            elif link.get("target") == entity:
-                source = link.get("source")
-                strength = link.get("value", 1)
-                connections.append({"entity": source, "strength": strength})
-        
-        # Sort by strength
-        connections.sort(key=lambda x: x["strength"], reverse=True)
-        
-        return {
-            "id": entity,
-            "count": node.get("count", 0),
-            "connections": connections
-        }
