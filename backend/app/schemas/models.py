@@ -14,7 +14,7 @@ class Article(BaseModel):
 
 class SearchResult(BaseModel):
     score: float
-    payload: Article
+    payload: Dict[str, Any]  # Changed from Article to Dict to match API implementation
 
 class SearchRequest(BaseModel):
     query: str
