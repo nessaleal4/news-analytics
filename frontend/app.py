@@ -7,7 +7,7 @@ from datetime import datetime
 import time
 import logging
 
-from utils.api import APIClient
+from frontend.utils.api import APIClient
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
