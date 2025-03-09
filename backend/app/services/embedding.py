@@ -3,7 +3,6 @@ import numpy as np
 import logging
 from typing import List, Union
 import torch
-
 from app.config import get_settings
 
 logger = logging.getLogger(__name__)
