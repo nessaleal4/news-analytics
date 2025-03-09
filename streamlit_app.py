@@ -1,7 +1,6 @@
 """
 Main entry point for Streamlit Cloud deployment
 """
-
 # Import the main app from the frontend directory
 import sys
 import os
