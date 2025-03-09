@@ -199,7 +199,14 @@ class APIClient:
         
         df = st.session_state.local_data["news_articles"]
         
-        def process_topic_info(topic_info, topic_keywords):
+        # Sort by date if available
+        if 'date' in df.columns:
+            df = df.sort_values('date', ascending=False)
+        
+        # Convert rows to dictionaries
+        return [row.to_dict() for i, row in df.head(limit).iterrows()]
+    
+    def process_topic_info(self, topic_info, topic_keywords):
             """Process topic info into a standardized format"""
             topics = []
             try:
@@ -357,6 +364,70 @@ class APIClient:
             "total_entities": len(graph.get("nodes", [])),
             "total_connections": len(graph.get("links", []))
         }
+    
+    def get_categories(self) -> List[str]:
+        """Get available news categories"""
+        if hasattr(st.session_state, "use_local_data") and st.session_state.use_local_data:
+            # Use local data
+            return self._get_local_categories()
+        
+        # Try API first
+        try:
+            url = f"{self.base_url}/api/categories"
+            
+            response = requests.get(url, timeout=10)
+            data = self._handle_response(response)
+            return data.get("categories", [])
+        except Exception as e:
+            self.logger.error(f"Error getting categories: {e}")
+            # Fallback to local data
+            return self._get_local_categories()
+    
+    def _get_local_categories(self) -> List[str]:
+        """Get categories from local data"""
+        if not hasattr(st.session_state, "local_data") or st.session_state.local_data["news_articles"] is None:
+            return []
+        
+        df = st.session_state.local_data["news_articles"]
+        
+        # Return unique categories if category column exists
+        if 'category' in df.columns:
+            return sorted(df['category'].unique().tolist())
+        
+        # Default categories if not available
+        return ["Politics", "Business", "Technology", "Science", "Health"]
+    
+    def get_sources(self) -> List[str]:
+        """Get available news sources"""
+        if hasattr(st.session_state, "use_local_data") and st.session_state.use_local_data:
+            # Use local data
+            return self._get_local_sources()
+        
+        # Try API first
+        try:
+            url = f"{self.base_url}/api/sources"
+            
+            response = requests.get(url, timeout=10)
+            data = self._handle_response(response)
+            return data.get("sources", [])
+        except Exception as e:
+            self.logger.error(f"Error getting sources: {e}")
+            # Fallback to local data
+            return self._get_local_sources()
+    
+    def _get_local_sources(self) -> List[str]:
+        """Get sources from local data"""
+        if not hasattr(st.session_state, "local_data") or st.session_state.local_data["news_articles"] is None:
+            return []
+        
+        df = st.session_state.local_data["news_articles"]
+        
+        # Return unique sources if source column exists
+        if 'source' in df.columns:
+            return sorted(df['source'].unique().tolist())
+        
+        # Default sources if not available
+        return ["Associated Press", "Reuters", "BBC", "CNN", "Fox News"]
     
     def get_top_entities(self, limit: int = 20) -> List[Dict[str, Any]]:
         """Get top entities by mention count"""
