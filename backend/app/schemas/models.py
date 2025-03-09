@@ -21,4 +21,4 @@ class SearchRequest(BaseModel):
     limit: int = Field(10, ge=1, le=50)
 
 class SearchResponse(BaseModel):
-    results
+    results: List[SearchResult]
