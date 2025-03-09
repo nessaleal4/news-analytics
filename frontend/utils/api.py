@@ -369,8 +369,8 @@ class APIClient:
     
     def get_topics(self) -> List[Dict[str, Any]]:
     """Get topics with their keywords and counts"""
-    if hasattr(st.session_state, "use_local_data") and st.session_state.use_local_data:
-        # Use local data
+        if hasattr(st.session_state, "use_local_data") and st.session_state.use_local_data:
+            # Use local data
         return self._get_local_topics()
     
     # Try API first
