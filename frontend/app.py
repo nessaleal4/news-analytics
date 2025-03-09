@@ -18,7 +18,8 @@ DEFAULT_API_URL = "https://news-analytics.fly.dev"
 
 # Initialize session state
 if "api_client" not in st.session_state:
-    api_url = st.secrets.get("API_URL", DEFAULT_API_URL)
+    # Change API_URL to BACKEND_URL to match the secret name in Streamlit Cloud
+    api_url = st.secrets.get("BACKEND_URL", DEFAULT_API_URL)
     st.session_state.api_client = APIClient(api_url)
 
 # Page configuration
