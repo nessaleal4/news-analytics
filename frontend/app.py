@@ -16,11 +16,67 @@ logger = logging.getLogger(__name__)
 # Constants
 DEFAULT_API_URL = "https://news-analytics.fly.dev"
 
+def load_local_data():
+    """Load data from local files in the data directory when API is unavailable"""
+    data_dir = os.path.join(os.path.dirname(__file__), "data")
+    
+    local_data = {
+        "news_articles": None,
+        "topic_info": None,
+        "topic_keywords": None,
+        "knowledge_graph": None
+    }
+    
+    # Load news articles CSV
+    articles_path = os.path.join(data_dir, "news_articles.csv")
+    if os.path.exists(articles_path):
+        try:
+            local_data["news_articles"] = pd.read_csv(articles_path)
+            logger.info(f"Loaded {len(local_data['news_articles'])} articles from local file")
+        except Exception as e:
+            logger.error(f"Error loading news articles: {e}")
+    
+    # Load topic info JSON
+    topic_info_path = os.path.join(data_dir, "topic_info.json")
+    if os.path.exists(topic_info_path):
+        try:
+            with open(topic_info_path, "r") as f:
+                local_data["topic_info"] = json.load(f)
+            logger.info(f"Loaded topic info from local file")
+        except Exception as e:
+            logger.error(f"Error loading topic info: {e}")
+    
+    # Load topic keywords JSON
+    keywords_path = os.path.join(data_dir, "topic_keywords.json")
+    if os.path.exists(keywords_path):
+        try:
+            with open(keywords_path, "r") as f:
+                local_data["topic_keywords"] = json.load(f)
+            logger.info(f"Loaded topic keywords from local file")
+        except Exception as e:
+            logger.error(f"Error loading topic keywords: {e}")
+    
+    # Load knowledge graph JSON
+    graph_path = os.path.join(data_dir, "knowledge_graph.json")
+    if os.path.exists(graph_path):
+        try:
+            with open(graph_path, "r") as f:
+                local_data["knowledge_graph"] = json.load(f)
+            logger.info(f"Loaded knowledge graph from local file")
+        except Exception as e:
+            logger.error(f"Error loading knowledge graph: {e}")
+    
+    return local_data
+
 # Initialize session state
 if "api_client" not in st.session_state:
     # Change API_URL to BACKEND_URL to match the secret name in Streamlit Cloud
     api_url = st.secrets.get("BACKEND_URL", DEFAULT_API_URL)
     st.session_state.api_client = APIClient(api_url)
+    
+    # Load local data for fallback
+    st.session_state.local_data = load_local_data()
+    st.session_state.use_local_data = False  # Start with API if available
 
 # Page configuration
 st.set_page_config(
@@ -58,6 +114,15 @@ def main():
             if st.button("Update API URL"):
                 st.session_state.api_client = APIClient(api_url)
                 st.success(f"API URL updated to {api_url}")
+            
+            # Option to toggle between API and local data
+            use_local = st.checkbox("Use local data", value=st.session_state.use_local_data)
+            if use_local != st.session_state.use_local_data:
+                st.session_state.use_local_data = use_local
+                if use_local:
+                    st.info("Using local data files from the data directory")
+                else:
+                    st.info("Using remote API")
     
     # Main content
     if app_mode == "Search":
@@ -163,6 +228,9 @@ def render_search_page():
         
         with st.spinner("Loading recent articles..."):
             recent = st.session_state.api_client.get_recent_articles(limit=5)
+            
+            if not recent:
+                st.info("No recent articles available. The API may be unavailable or still initializing.")
             
             for result in recent:
                 payload = result.get("payload", {})
@@ -285,7 +353,7 @@ def render_topics_page():
                         
                         st.markdown("---")
     else:
-        st.info("No topic data available. Please run the topic modeling process.")
+        st.info("No topic data available. The API may be unavailable or still initializing.")
 
 def render_knowledge_graph_page():
     st.header("Knowledge Graph")
@@ -364,7 +432,7 @@ def render_knowledge_graph_page():
             else:
                 st.info(f"No connections found for {entity_name}")
     else:
-        st.info("No entity data available.")
+        st.info("No entity data available. The API may be unavailable or still initializing.")
     
     # Knowledge Graph Visualization
     st.subheader("Graph Visualization")
@@ -410,7 +478,7 @@ def render_knowledge_graph_page():
         
         components.html(html, height=600)
     else:
-        st.info("No graph data available for visualization.")
+        st.info("No graph data available for visualization. The API may be unavailable or still initializing.")
 
 def render_about_page():
     st.header("About News Analytics")
@@ -426,7 +494,7 @@ def render_about_page():
     
     ### Technology Stack
     
-    - **Backend**: FastAPI on Fly.io with BERTopic for topic modeling
+    - **Backend**: FastAPI on Railway with BERTopic for topic modeling
     - **Frontend**: Streamlit
     - **Vector Database**: Qdrant Cloud for semantic search
     - **Embeddings**: Sentence Transformers
@@ -435,6 +503,12 @@ def render_about_page():
     
     News articles are scraped from CNN and processed using NLP pipelines.
     The data is updated every 12 hours to keep the content fresh.
+    
+    ### Fallback Mechanism
+    
+    This application includes a fallback to local data when the API is unavailable.
+    This ensures you can still explore the interface and functionality even when
+    the backend is initializing or offline.
     
     ### Code and Deployment
     
@@ -456,6 +530,12 @@ def render_about_page():
         st.success(f"API is online. Response time: {response_time}ms")
     except Exception as e:
         st.error(f"API is offline or experiencing issues: {str(e)}")
+        
+        # Show local data status
+        if st.session_state.local_data["news_articles"] is not None:
+            st.success(f"Using local data: {len(st.session_state.local_data['news_articles'])} articles available")
+        else:
+            st.warning("No local data available. Both API and local fallback are unavailable.")
 
 if __name__ == "__main__":
     main()
