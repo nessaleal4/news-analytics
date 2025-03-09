@@ -429,6 +429,84 @@ class APIClient:
         # Default sources if not available
         return ["Associated Press", "Reuters", "BBC", "CNN", "Fox News"]
     
+    def get_topic_summary(self, topic_id: int) -> Dict[str, Any]:
+        """Get summary information for a specific topic"""
+        if hasattr(st.session_state, "use_local_data") and st.session_state.use_local_data:
+            # Use local data
+            return self._get_local_topic_summary(topic_id)
+        
+        # Try API first
+        try:
+            url = f"{self.base_url}/api/topics/{topic_id}/summary"
+            
+            response = requests.get(url, timeout=10)
+            data = self._handle_response(response)
+            return data
+        except Exception as e:
+            self.logger.error(f"Error getting topic summary: {e}")
+            # Fallback to local data
+            return self._get_local_topic_summary(topic_id)
+    
+    def _get_local_topic_summary(self, topic_id: int) -> Dict[str, Any]:
+        """Get topic summary from local data"""
+        if not hasattr(st.session_state, "local_data"):
+            return {"id": topic_id, "name": f"Topic {topic_id}", "count": 0, "keywords": [], "description": ""}
+        
+        # Try to get topic info
+        if "topic_info" in st.session_state.local_data:
+            topic_info = st.session_state.local_data["topic_info"]
+            
+            # Handle different formats of topic info
+            topic_data = None
+            if isinstance(topic_info, list):
+                # List format
+                topic_data = next((t for t in topic_info if t.get("Topic") == topic_id), None)
+                if topic_data:
+                    # Get keywords for this topic if available
+                    keywords = []
+                    if "topic_keywords" in st.session_state.local_data:
+                        topic_keywords = st.session_state.local_data["topic_keywords"]
+                        if str(topic_id) in topic_keywords:
+                            keywords = [item["word"] for item in topic_keywords[str(topic_id)]]
+                    
+                    return {
+                        "id": topic_id,
+                        "name": topic_data.get("Name", f"Topic {topic_id}"),
+                        "count": topic_data.get("Count", 0),
+                        "keywords": keywords,
+                        "description": self._generate_topic_description(keywords)
+                    }
+            elif isinstance(topic_info, dict) and str(topic_id) in topic_info:
+                # Dictionary format
+                topic_data = topic_info[str(topic_id)]
+                
+                # Get keywords for this topic if available
+                keywords = []
+                if "topic_keywords" in st.session_state.local_data:
+                    topic_keywords = st.session_state.local_data["topic_keywords"]
+                    if str(topic_id) in topic_keywords:
+                        keywords = [item["word"] for item in topic_keywords[str(topic_id)]]
+                
+                return {
+                    "id": topic_id,
+                    "name": topic_data.get("name", f"Topic {topic_id}"),
+                    "count": topic_data.get("count", 0),
+                    "keywords": keywords,
+                    "description": self._generate_topic_description(keywords)
+                }
+        
+        # Default response if topic not found
+        return {"id": topic_id, "name": f"Topic {topic_id}", "count": 0, "keywords": [], "description": ""}
+    
+    def _generate_topic_description(self, keywords: List[str]) -> str:
+        """Generate a simple description for a topic based on keywords"""
+        if not keywords:
+            return "No description available for this topic."
+        
+        # Use top 5 keywords for the description
+        top_keywords = keywords[:5]
+        return f"This topic covers news related to {', '.join(top_keywords)}."
+    
     def get_top_entities(self, limit: int = 20) -> List[Dict[str, Any]]:
         """Get top entities by mention count"""
         if hasattr(st.session_state, "use_local_data") and st.session_state.use_local_data:
