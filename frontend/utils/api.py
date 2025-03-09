@@ -368,22 +368,22 @@ class APIClient:
         }
     
     def get_topics(self) -> List[Dict[str, Any]]:
-        """Get topics with their keywords and counts"""
-        if hasattr(st.session_state, "use_local_data") and st.session_state.use_local_data:
-            # Use local data
-            return self._get_local_topics()
+    """Get topics with their keywords and counts"""
+    if hasattr(st.session_state, "use_local_data") and st.session_state.use_local_data:
+        # Use local data
+        return self._get_local_topics()
+    
+    # Try API first
+    try:
+        url = f"{self.base_url}/api/topics/list"
         
-        # Try API first
-        try:
-            url = f"{self.base_url}/api/topics/list"
-            
-            response = requests.get(url, timeout=10)
-data = self._handle_response(response)
-            return data.get("topics", [])
-        except Exception as e:
-            self.logger.error(f"Error getting topics: {e}")
-            # Fallback to local data
-            return self._get_local_topics()
+        response = requests.get(url, timeout=10)
+        data = response.json()
+        return data.get("topics", [])
+    except Exception as e:
+        self.logger.error(f"Error getting topics: {e}")
+        # Fallback to local data
+        return self._get_local_topics()
     
     def _get_local_topics(self) -> List[Dict[str, Any]]:
         """Get topics from local data"""
